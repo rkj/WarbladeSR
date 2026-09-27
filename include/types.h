@@ -104,15 +104,18 @@ struct Settings {   // 0x638 bytes; at 0xa928d0[1], 0xd2eb30[1], 0xaf7848
     int unused030; // +0x30
     unsigned char musicFormat; // +0x34
     char pad_35[0x3]; // +0x35
-    int soundMode; // +0x38
+    int unused038; // +0x38: BASS hardware/software mixing (0x20/0x40), unused since SDL
     int unused03c; // +0x3c
     int musicVolume; // +0x40
     int sfxVol; // +0x44
     int fps; // +0x48
     float numStars; // +0x4c
     unsigned char unused050; // +0x50
-    char pad_51[0x3]; // +0x51
-    int bpp; // +0x54
+    // SDL port additions in padding bytes, which original files leave 0 (0 = the default).
+    unsigned char vsyncOff; // +0x51 1: vsync off; anything else: on
+    unsigned char interpolation; // +0x52 SYS_INTERP_* (sdlhelp.h); out of range: auto
+    char pad_53; // +0x53
+    int unused054; // +0x54 (was the 16/32-bit colour depth)
     int sfxOn; // +0x58
     int unused05c; // +0x5c
     int collisionDetail; // +0x60
@@ -148,7 +151,7 @@ struct Settings {   // 0x638 bytes; at 0xa928d0[1], 0xd2eb30[1], 0xaf7848
     int difficulty; // +0xf8
     int bgEnabled; // +0xfc
     int bgTint; // +0x100
-    int freq; // +0x104
+    int unused104; // +0x104: BASS output rate (22050/44100), unused since SDL
     float sparks; // +0x108
     int profileSel; // +0x10c
     union {
@@ -356,7 +359,7 @@ struct SettingsV2 {   // 0x630 bytes; at 0xafd610[1]; the old (0x3c00-byte file)
     int unused030;
     char musicFormat;
     char pad_35[0x3]; // +0x35
-    int soundMode;
+    int unused038;
     int unused03c;
     int musicVolume;
     int sfxVol;
@@ -364,7 +367,7 @@ struct SettingsV2 {   // 0x630 bytes; at 0xafd610[1]; the old (0x3c00-byte file)
     float numStars;
     char unused050;
     char pad_51[0x3]; // +0x51
-    int bpp;
+    int unused054;
     int sfxOn;
     int unused05c;
     int collisionDetail;
@@ -381,7 +384,7 @@ struct SettingsV2 {   // 0x630 bytes; at 0xafd610[1]; the old (0x3c00-byte file)
     int difficulty;
     int bgEnabled;
     int bgTint;
-    int freq;
+    int unused104;
     float sparks;
     int profileSel;
     int joyFireAlt0;

@@ -298,10 +298,8 @@ void InitMenu()
     AddMenuItem(g_lastRight, g_lastTop, ">", 1, g_nextId, -1, 0, 2, 80);
     AddMenuItem(x, g_lastBottom, "<", 1, g_nextId, -1, 0, 2, 80);
     AddMenuItem(g_lastRight, g_lastTop, ">", 1, g_nextId, -1, 0, 2, 80);
-    g_nextId += 4;
+    g_nextId += 6;  // 121-124 were never used; 125-126 were the colour-depth arrows
 
-    AddMenuItem(x, g_lastBottom, "<", 1, g_nextId, -1, 0, 2, 80);
-    AddMenuItem(g_lastRight, g_lastTop, ">", 1, g_nextId, -1, 0, 2, 80);
     AddMenuItem(x, g_lastBottom, "<", 1, g_nextId, -1, 0, 2, 80);
     AddMenuItem(g_lastRight, g_lastTop, ">", 1, g_nextId, -1, 0, 2, 80);
     AddMenuItem(x, g_lastBottom, "<", 1, g_nextId, -1, 0, 2, 80);
@@ -320,8 +318,11 @@ void InitMenu()
     AddMenuItem(x, g_lastBottom, "JUKEBOX", 1, MENUID_JUKEBOX, -1, 0, 2, 160);
     AddMenuItem(x, g_lastBottom + 11, "CONFIG", 1, MENUID_CONFIG, -1, 0, 2, 160);
 
-    // Renderer (was PTK's "USE OPENGL" / "USE DIRECT X").
-    AddMenuItem(x, g_lastBottom, RendererLabel(g_cfg.renderer), 1, MENUID_TOGGLE_RENDERER, -1, 0, 2, 160);
+    // Renderer (was PTK's "USE OPENGL" / "USE DIRECT X"), vsync, interpolation: the
+    // settings-page lines beside them show the values.
+    AddMenuItem(x, g_lastBottom, "CYCLE RENDERER", 1, MENUID_TOGGLE_RENDERER, -1, 0, 2, 160);
+    AddMenuItem(x, g_lastBottom, "TOGGLE VSYNC", 1, MENUID_TOGGLE_VSYNC, -1, 0, 2, 160);
+    AddMenuItem(x, g_lastBottom, "CYCLE INTERPOLATION", 1, MENUID_TOGGLE_INTERPOLATION, -1, 0, 2, 160);
 
     if (!g_cfg.shuffle) {
         AddMenuItem(x, g_lastBottom, "USE RANDOM MODE", 1, MENUID_TOGGLE_SHUFFLE, -1, 0, 2, 160);
@@ -332,7 +333,6 @@ void InitMenu()
     AddMenuItem(x, g_lastBottom, "USER PROFILES", 1, MENUID_TOGGLE_PROFILE_LIST, -1, 0, 2, 160);
     AddMenuItem(x, g_lastBottom + 11, "TOGGLE INPUT", 1, MENUID_TOGGLE_INPUT_SWAP, -1, 0, 2, 160);
     AddMenuItem(x, g_lastBottom, "TOGGLE SCREENMODE", 1, MENUID_TOGGLE_WINDOWED, -1, 0, 2, 160);
-    AddMenuItem(x, g_lastBottom, "TOGGLE SOUND MIXER", 1, MENUID_RELOAD_SOUND, -1, 0, 2, 160);
 }
 
 // Hides every menu entry belonging to page owner.
@@ -1345,7 +1345,6 @@ void MenuUpdate(bool moved)
     // ---- initial quality presets offered on first run (4000 low .. 4003 ultra) ----
     if (g_clickItem == MENUID_QUALITY_PRESET_LOW) {
         g_cfg.borderMode = BORDER_OFF;
-        g_cfg.bpp = 16;
         g_cfg.sfxVol = 204;
         g_cfg.musicVolume = 179;
         g_cfg.musicVol = 255;
@@ -1363,7 +1362,6 @@ void MenuUpdate(bool moved)
         g_cfg.particlesOn = 0;
         g_cfg.bgEnabled = 0;
         g_cfg.bgTint = BG_BRIGHTNESS_PRESET;
-        g_cfg.freq = 22050;
         g_cfg.sparks = 15.0f;
         g_cfg.alienBuffer = 5;
         g_maxSparks = ((int)g_cfg.sparks >> 1 < 5) ? 5 : (int)g_cfg.sparks >> 1;
@@ -1381,7 +1379,6 @@ void MenuUpdate(bool moved)
 
     if (g_clickItem == MENUID_QUALITY_PRESET_MEDIUM) {
         g_cfg.borderMode = BORDER_OFF;
-        g_cfg.bpp = 16;
         g_cfg.sfxVol = 204;
         g_cfg.musicVolume = 179;
         g_cfg.musicVol = 255;
@@ -1399,7 +1396,6 @@ void MenuUpdate(bool moved)
         g_cfg.particlesOn = 0;
         g_cfg.bgEnabled = 0;
         g_cfg.bgTint = BG_BRIGHTNESS_PRESET;
-        g_cfg.freq = 22050;
         g_cfg.sparks = 30.0f;
         g_cfg.alienBuffer = 5;
         g_maxSparks = ((int)g_cfg.sparks >> 1 < 5) ? 5 : (int)g_cfg.sparks >> 1;
@@ -1417,7 +1413,6 @@ void MenuUpdate(bool moved)
 
     if (g_clickItem == MENUID_QUALITY_PRESET_HIGH) {
         g_cfg.borderMode = BORDER_ON;
-        g_cfg.bpp = 16;
         g_cfg.sfxVol = 204;
         g_cfg.musicVolume = 179;
         g_cfg.musicVol = 255;
@@ -1435,7 +1430,6 @@ void MenuUpdate(bool moved)
         g_cfg.particlesOn = 1;
         g_cfg.bgEnabled = 0;
         g_cfg.bgTint = BG_BRIGHTNESS_PRESET;
-        g_cfg.freq = 44100;
         g_cfg.sparks = 100.0f;
         g_cfg.alienBuffer = 5;
         g_maxSparks = ((int)g_cfg.sparks >> 1 < 5) ? 5 : (int)g_cfg.sparks >> 1;
@@ -1453,7 +1447,6 @@ void MenuUpdate(bool moved)
 
     if (g_clickItem == MENUID_QUALITY_PRESET_ULTRA) {
         g_cfg.borderMode = BORDER_ON;
-        g_cfg.bpp = 32;
         g_cfg.sfxVol = 204;
         g_cfg.musicVolume = 179;
         g_cfg.musicVol = 255;
@@ -1471,7 +1464,6 @@ void MenuUpdate(bool moved)
         g_cfg.particlesOn = 1;
         g_cfg.bgEnabled = 1;
         g_cfg.bgTint = BG_BRIGHTNESS_PRESET;
-        g_cfg.freq = 44100;
         g_cfg.sparks = 150.0f;
         g_cfg.alienBuffer = 5;
         g_maxSparks = ((int)g_cfg.sparks >> 1 < 5) ? 5 : (int)g_cfg.sparks >> 1;
@@ -1603,6 +1595,7 @@ void MenuUpdate(bool moved)
                 g_hiscore = g_cfg.best;
                 int savedC8 = g_cfg.alienBuffer;
                 g_cfg = g_acc.settings;
+                ApplyFrameSettings();
 
                 if (g_joyCount == 0 && (g_cfg.device0 == DEVICE_JOYSTICK1 || g_cfg.device0 == DEVICE_JOYSTICK2)) {
                     g_cfg.device0 = DEVICE_KEYBOARD;
@@ -1686,13 +1679,9 @@ void MenuUpdate(bool moved)
                 g_cfg.alienBuffer = 5;
             if (g_cfg.fps < 50 || g_cfg.fps > 90)
                 g_cfg.fps = FPS_HARD;
-            if (g_cfg.bpp != 16 && g_cfg.bpp != 16 && g_cfg.bpp != 32)
-                g_cfg.bpp = 16;
             if (g_cfg.collisionDetail != COLLISION_SIMPLE && g_cfg.collisionDetail != COLLISION_NORMAL)
                 g_cfg.collisionDetail = COLLISION_NORMAL;
 
-            if (g_cfg.freq != 44100 && g_cfg.freq != 22050)
-                g_cfg.freq = 44100;
             if (g_cfg.sparks < 10.0 || g_cfg.sparks > 150.0)
                 g_cfg.sparks = 50.0f;
             g_maxSparks = ((int)g_cfg.sparks >> 1 < 5) ? 5 : (int)g_cfg.sparks >> 1;
@@ -2701,27 +2690,6 @@ void MenuHandler()
             g_transitionLock = 1;
         }
 
-        if (g_clicked == MENUID_BPP_PREV) {
-            g_lastActivityTime = g_time;
-            g_attractScreen = ATTRACT_HELP_CONTROLS;
-            g_idleTimeoutMs = 60000;
-            if (g_cfg.bpp == 16) g_cfg.bpp = 32;
-            else if (g_cfg.bpp == 32) g_cfg.bpp = 16;
-            PlayClick();
-            g_transitionLockUntil = g_time + TRANSITION_LOCK_MS;
-            g_transitionLock = 1;
-        }
-        if (g_clicked == MENUID_BPP_NEXT) {
-            g_lastActivityTime = g_time;
-            g_attractScreen = ATTRACT_HELP_CONTROLS;
-            g_idleTimeoutMs = 60000;
-
-            if (g_cfg.bpp == 32) g_cfg.bpp = 16;
-            else if (g_cfg.bpp == 16) g_cfg.bpp = 32;
-            PlayClick();
-            g_transitionLockUntil = g_time + TRANSITION_LOCK_MS;
-            g_transitionLock = 1;
-        }
         if (g_clicked == MENUID_NUM_STARS_DOWN) {
             g_lastActivityTime = g_time;
             g_attractScreen = ATTRACT_HELP_CONTROLS;
@@ -3290,23 +3258,6 @@ void MenuHandler()
         } else {
             g_keyLatch[K_VK_U] = 1;
         }
-        if (KeyDown(K_VK_D)) {
-
-            if (g_keyLatch[K_VK_D] != 0) {
-                g_lastActivityTime = g_time;
-                g_attractScreen = ATTRACT_HELP_CONTROLS;
-                g_idleTimeoutMs = 15000;
-                if (g_cfg.bpp == 8) g_cfg.bpp = 16;
-                else if (g_cfg.bpp == 16) g_cfg.bpp = 32;
-                else if (g_cfg.bpp == 32) g_cfg.bpp = 16;
-                g_keyLatch[K_VK_D] = 0;
-                MergeSettings(g_profileIndex);
-                WriteSettings();
-                PlayClick();
-            }
-        } else {
-            g_keyLatch[K_VK_D] = 1;
-        }
 
         if (KeyDown(K_VK_W)) {
             if (g_keyLatch[K_VK_W] != 0) {
@@ -3314,6 +3265,9 @@ void MenuHandler()
                 g_attractScreen = ATTRACT_HELP_CONTROLS;
                 g_idleTimeoutMs = 15000;
                 g_cfg.windowed = !g_cfg.windowed;
+
+                SysSetFullscreen(!g_cfg.windowed);
+
                 g_keyLatch[K_VK_W] = 0;
                 MergeSettings(g_profileIndex);
                 WriteSettings();
@@ -3323,28 +3277,29 @@ void MenuHandler()
             g_keyLatch[K_VK_W] = 1;
         }
 
-        // -- "S" key: toggle sound mode and reload sound effects --
+        // -- "S" key: cycle interpolation (before the SDL port it toggled BASS's
+        // hardware/software sample mixing) --
         if (KeyDown(K_VK_S)) {
             if (g_keyLatch[K_VK_S] != 0) {
-                if (g_cfg.soundMode == SOUND_MODE_HARDWARE) g_cfg.soundMode = SOUND_MODE_SOFTWARE;
-                else g_cfg.soundMode = SOUND_MODE_HARDWARE;
-                MergeSettings(g_profileIndex);
-                WriteSettings();
-                PlayClick();
-                QueueQuad(0, (float)(g_screenW / 2 - 200.0), (float)(g_screenH / 2 - 50.0),
-                                 400.0f, 100.0f, g_gfxLogos, 113.0f, 191.0f, 16.0f, 16.0f);
-                DrawMenuText("RELOADING SOUND EFFECTS", POS_CENTERED, 285, 6);
-                g_textCursorY += 4;
-                DrawMenuText("PLEASE WAIT A MOMENT", POS_CENTERED, g_textAutoY, 6);
-                FlushQuads(0);
-                FlushBlit(0);
-                FlipBuffer(0);
-                InitSound();
-                PlayTitleMusic();
+                g_lastActivityTime = g_time;
+                g_attractScreen = ATTRACT_HELP_CONTROLS;
+                g_idleTimeoutMs = 15000;
+                CycleInterpolation();
                 g_keyLatch[K_VK_S] = 0;
+                PlayClick();
             }
         } else {
             g_keyLatch[K_VK_S] = 1;
+        }
+
+        // -- ALT + V: toggle vsync (plain V below skips Alt, and resets the shared latch) --
+        if (KeyDown(K_VK_MENU) && KeyDown(K_VK_V) && g_keyLatch[K_VK_V] != 0) {
+            g_lastActivityTime = g_time;
+            g_attractScreen = ATTRACT_HELP_CONTROLS;
+            g_idleTimeoutMs = 15000;
+            ToggleVSync();
+            g_keyLatch[K_VK_V] = 0;
+            PlayClick();
         }
 
         // -- "V" key / buttons 150-151: cycle to the next available announcer voice --
@@ -3464,7 +3419,21 @@ void MenuHandler()
             MergeSettings(g_profileIndex);
             WriteSettings();
             PlayClick();
-            InitMenu();
+            g_mouseClick = 0;
+            g_mouseClickHandled = 1;
+            g_mouseDown = 0;
+        }
+
+        // Vsync on/off and interpolation auto/on/off take effect at once.
+        if (g_clicked == MENUID_TOGGLE_VSYNC || g_clicked == MENUID_TOGGLE_INTERPOLATION) {
+            g_lastActivityTime = g_time;
+            g_attractScreen = ATTRACT_HELP_CONTROLS;
+            g_idleTimeoutMs = 15000;
+            if (g_clicked == MENUID_TOGGLE_VSYNC)
+                ToggleVSync();
+            else
+                CycleInterpolation();
+            PlayClick();
             g_mouseClick = 0;
             g_mouseClickHandled = 1;
             g_mouseDown = 0;
@@ -3495,30 +3464,9 @@ void MenuHandler()
             g_attractScreen = ATTRACT_HELP_CONTROLS;
             g_idleTimeoutMs = 15000;
             g_cfg.windowed = !g_cfg.windowed;
-            MergeSettings(g_profileIndex);
-            WriteSettings();
-            PlayClick();
-            g_mouseClick = 0;
-            g_mouseClickHandled = 1;
-            g_mouseDown = 0;
-        }
 
-        if (g_clicked == MENUID_RELOAD_SOUND) {
-            if (g_cfg.soundMode == SOUND_MODE_HARDWARE) g_cfg.soundMode = SOUND_MODE_SOFTWARE;
-            else g_cfg.soundMode = SOUND_MODE_HARDWARE;
-            QueueQuad(0, (float)(g_screenW / 2 - 200.0), (float)(g_screenH / 2 - 50.0),
-                             400.0f, 100.0f, g_gfxLogos, 113.0f, 191.0f, 16.0f, 16.0f);
-            DrawMenuText("RELOADING SOUND EFFECTS", POS_CENTERED, 285, 6);
-            g_textCursorY += 4;
-            DrawMenuText("PLEASE WAIT A MOMENT", POS_CENTERED, g_textAutoY, 6);
-            FlushQuads(0);
-            FlushBlit(0);
-            FlipBuffer(0);
-            InitSound();
-            PlayTitleMusic();
-            g_lastActivityTime = g_time;
-            g_attractScreen = ATTRACT_HELP_CONTROLS;
-            g_idleTimeoutMs = 15000;
+            SysSetFullscreen(!g_cfg.windowed);
+
             MergeSettings(g_profileIndex);
             WriteSettings();
             PlayClick();

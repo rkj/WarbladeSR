@@ -6,7 +6,10 @@
 //   between frames; SysFlip scales it into the window, letterboxed.
 // - SysFlip caps the frame rate the way PTK did: at least 1000/fps whole milliseconds per
 //   frame (16 ms, i.e. 62.5 fps, for 60), and it waits while the window is in the background.
-//   Presents are vsynced, so on a 60 Hz display the pace is the refresh rate.
+//   With vsync on (the default) a 60 Hz display sets the pace instead.
+// - On other displays SysFlip can interpolate: each tick's draws are recorded, matched to the
+//   previous tick's and shown blended at the display's rate, while the game still ticks at
+//   the rate above (see "Interpolation" below).
 // - Blits, stretches and primitives follow KGraphicGL: blend factors per alpha mode, tint times
 //   blend for the alpha, rotation (counter-clockwise, in degrees) about the destination centre
 //   plus (centerX, centerY).
@@ -28,10 +31,22 @@ static bool          s_fullscreen;
 static bool          s_quit;
 static bool          s_focused = true;
 static void        (*s_focusFn)(bool focused);
+static int           s_fps = 60;         // SysSetMaxFps
 static int           s_frameMs = 16;     // PTK: 1000 / fps, whole milliseconds; 0 = no cap
 static Uint64        s_lastFlipNs;
 static unsigned      s_frame;            // flips so far
 static float         s_clearR, s_clearG, s_clearB, s_clearA = 1.0f;
+static bool          s_vsync = true;
+static int           s_interpMode = SYS_INTERP_AUTO;
+
+// Interpolation state (see "Interpolation").
+static SDL_Texture  *s_base;             // the back buffer as it was before this tick's draws
+static SDL_Texture  *s_view;             // the picture at window resolution (RenderInterpolated)
+static bool          s_recording;        // this tick's draws are being recorded
+static Uint64        s_tickDueNs;        // when the tick being shown was due to start
+static Uint64        s_nextFrameNs;      // without vsync: when the next interpolated frame is due
+
+static void RecordFill(SDL_FRect rect, SDL_BlendMode blend, float r, float g, float b, float a);
 
 // ---------------------------------------------------------------------------------------------
 // Window, frame and events
@@ -39,7 +54,7 @@ static float         s_clearR, s_clearG, s_clearB, s_clearA = 1.0f;
 
 void SysInit(void)
 {
-    SDL_SetAppMetadata("Warblade", "1.34", "as.warblade.warblade");
+    SDL_SetAppMetadata("Warblade", "1.34 SR1", "as.warblade.warblade");
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK))
         SDL_Log("SDL_Init failed: %s", SDL_GetError());
 }
@@ -87,12 +102,11 @@ static void CanvasToWindow(float cx, float cy, float *wx, float *wy)
     *wy = (cy * r.h / s_height + r.y) * wh / ph;
 }
 
-bool SysCreateWindow(int w, int h, int bpp, bool windowed, const char *title, const char *renderDriver)
+bool SysCreateWindow(int w, int h, bool windowed, const char *title, const char *renderDriver)
 {
     SDL_WindowFlags flags = windowed ? SDL_WINDOW_RESIZABLE : SDL_WINDOW_RESIZABLE | SDL_WINDOW_FULLSCREEN;
     bool ok;
 
-    (void)bpp;
     SysDestroyWindow();
     SDL_SetHint(SDL_HINT_RENDER_DRIVER, renderDriver);     // NULL clears it
     ok = SDL_CreateWindowAndRenderer(title, w, h, flags, &s_window, &s_renderer);
@@ -104,18 +118,21 @@ bool SysCreateWindow(int w, int h, int bpp, bool windowed, const char *title, co
         s_renderer = NULL;
         return false;
     }
-    // Present on the vertical blank (no tearing); SysFlip's frame cap still sets the pace.
-    if (!SDL_SetRenderVSync(s_renderer, 1))
-        SDL_Log("SDL_SetRenderVSync failed: %s", SDL_GetError());
+    // Vsync presents on the vertical blank (no tearing); SysFlip's frame cap still sets the pace.
+    SysSetVSync(s_vsync);
     s_canvas = SDL_CreateTexture(s_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, w, h);
-    if (s_canvas == NULL) {
+    s_base = SDL_CreateTexture(s_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, w, h);
+    if (s_canvas == NULL || s_base == NULL) {
         SDL_Log("SDL_CreateTexture (back buffer) failed: %s", SDL_GetError());
         SysDestroyWindow();
         return false;
     }
     SDL_SetTextureBlendMode(s_canvas, SDL_BLENDMODE_NONE);
+    SDL_SetTextureBlendMode(s_base, SDL_BLENDMODE_NONE);
     // Pixel-art scaling keeps the 800x600 picture (and its bitmap fonts) sharp in large windows.
     SDL_SetTextureScaleMode(s_canvas, SDL_SCALEMODE_PIXELART);
+    SDL_SetTextureScaleMode(s_base, SDL_SCALEMODE_PIXELART);
+    s_recording = false;
     s_width = w;
     s_height = h;
     s_fullscreen = !windowed;
@@ -130,9 +147,18 @@ bool SysCreateWindow(int w, int h, int bpp, bool windowed, const char *title, co
 
 void SysDestroyWindow(void)
 {
+    s_recording = false;
     if (s_canvas) {
         SDL_DestroyTexture(s_canvas);
         s_canvas = NULL;
+    }
+    if (s_base) {
+        SDL_DestroyTexture(s_base);
+        s_base = NULL;
+    }
+    if (s_view) {
+        SDL_DestroyTexture(s_view);
+        s_view = NULL;
     }
     if (s_renderer) {
         SDL_DestroyRenderer(s_renderer);
@@ -160,6 +186,15 @@ void SysDisableScreenSaver(void) { SDL_DisableScreenSaver(); }
 void SysSetFocusCallback(void (*fn)(bool focused))
 {
     s_focusFn = fn;
+}
+
+void SysSetFullscreen(const bool fullscreen)
+{
+    if (s_fullscreen == fullscreen)
+        return;
+
+    SDL_SetWindowFullscreen(s_window, fullscreen);
+    s_fullscreen = fullscreen;
 }
 
 static void HandleEvent(const SDL_Event *e)
@@ -190,7 +225,43 @@ void SysProcessEvents(void)
     AudioTick();
 }
 
-void SysFlip(void)
+// Like PTK, the game stands still while its window is in the background.
+static void WaitForFocus(void)
+{
+    while (!s_focused && !s_quit) {
+        SDL_Event e;
+        if (SDL_WaitEventTimeout(&e, 100))
+            HandleEvent(&e);
+        AudioTick();
+    }
+}
+
+// The refresh rate of the window's display in Hz, 0 if unknown.
+static float RefreshRate(void)
+{
+    const SDL_DisplayMode *mode = SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(s_window));
+    return mode ? mode->refresh_rate : 0.0f;
+}
+
+// Whether frames are interpolated. Auto turns it off where it gains nothing: vsynced on a
+// display whose refresh rate is the game's frame rate, where each tick gets one refresh.
+static bool WantInterpolation(void)
+{
+    float hz;
+
+    if (s_frameMs == 0 || s_base == NULL || s_interpMode == SYS_INTERP_OFF)
+        return false;
+    if (s_interpMode == SYS_INTERP_ON)
+        return true;
+    hz = RefreshRate();
+    return !(s_vsync && hz > 0 && SDL_fabsf(hz - s_fps) < 0.5f);
+}
+
+static void FlipInterpolated(void);
+static void StartRecording(bool fresh);
+
+// Shows the back buffer as it is, then waits for the frame cap.
+static void FlipPlain(void)
 {
     SDL_FRect dst;
     Uint64 frameNs;
@@ -204,7 +275,6 @@ void SysFlip(void)
     SDL_RenderTexture(s_renderer, s_canvas, NULL, &dst);
     SDL_RenderPresent(s_renderer);
     SDL_SetRenderTarget(s_renderer, s_canvas);
-    s_frame++;
 
     SysProcessEvents();
 
@@ -213,21 +283,49 @@ void SysFlip(void)
     now = SDL_GetTicksNS();
     if (frameNs && now - s_lastFlipNs < frameNs)
         SDL_DelayPrecise(frameNs - (now - s_lastFlipNs));
-    s_lastFlipNs = SDL_GetTicksNS();
 
-    // Like PTK, the game stands still while its window is in the background.
-    while (!s_focused && !s_quit) {
-        SDL_Event e;
-        if (SDL_WaitEventTimeout(&e, 100))
-            HandleEvent(&e);
-        AudioTick();
-        s_lastFlipNs = SDL_GetTicksNS();
-    }
+    WaitForFocus();
+    s_lastFlipNs = SDL_GetTicksNS();
+    s_tickDueNs = s_lastFlipNs;         // the next tick starts now
+}
+
+void SysFlip(void)
+{
+    bool wasRecording = s_recording;
+
+    s_frame++;
+    // Interpolation needs this tick's draws, so it starts (or resumes) on the next tick.
+    if (wasRecording && WantInterpolation())
+        FlipInterpolated();
+    else
+        FlipPlain();
+
+    s_recording = WantInterpolation();
+    if (s_recording)
+        StartRecording(!wasRecording);
 }
 
 void SysSetMaxFps(int fps)
 {
+    s_fps = fps;
     s_frameMs = fps > 0 ? 1000 / fps : 0;
+}
+
+void SysSetVSync(bool on)
+{
+    s_vsync = on;
+    if (s_renderer && !SDL_SetRenderVSync(s_renderer, on ? 1 : SDL_RENDERER_VSYNC_DISABLED))
+        SDL_Log("SDL_SetRenderVSync failed: %s", SDL_GetError());
+}
+
+void SysSetInterpolation(int mode)
+{
+    s_interpMode = mode >= 0 && mode < SYS_INTERP_COUNT ? mode : SYS_INTERP_AUTO;
+}
+
+bool SysInterpolating(void)
+{
+    return WantInterpolation();
 }
 
 void SysSetClearColor(float r, float g, float b, float a)
@@ -244,9 +342,11 @@ void SysSetWorldView(float x, float y, float rotation, float zoom, bool clear)
     if (x != 0 || y != 0 || rotation != 0 || zoom != 1.0f)
         SDL_Log("SysSetWorldView: only the identity view is supported (%g %g %g %g)", x, y, rotation, zoom);
     if (clear) {
+        SDL_FRect all = { 0, 0, (float)s_width, (float)s_height };
         SDL_SetRenderDrawBlendMode(s_renderer, SDL_BLENDMODE_NONE);
         SDL_SetRenderDrawColorFloat(s_renderer, s_clearR, s_clearG, s_clearB, 1.0f);
         SDL_RenderClear(s_renderer);
+        RecordFill(all, SDL_BLENDMODE_NONE, s_clearR, s_clearG, s_clearB, 1.0f);
     }
 }
 
@@ -565,6 +665,9 @@ struct Image {
     bool linear;                // setTextureQuality
 };
 
+static void RecordBlit(Image *img, SDL_FRect src, SDL_FRect dst, float angle, SDL_FPoint pivot,
+                       SDL_FlipMode flip, float alpha);
+
 // Freed images wait here until no render queue can still hold them (see ImgIsFreed).
 static Image *s_freedImages;
 
@@ -664,10 +767,9 @@ bool  ImgIsFreed(const Image *img) { return img->freed; }
 float ImgWidth(Image *img)         { return img->w; }
 float ImgHeight(Image *img)        { return img->h; }
 
+// Applied per blit (Draw), as the interpolated frames draw with their own scale modes.
 void ImgSetTextureQuality(Image *img, bool quality)
 {
-    if (img->linear != quality && img->tex)
-        SDL_SetTextureScaleMode(img->tex, quality ? SDL_SCALEMODE_LINEAR : SDL_SCALEMODE_NEAREST);
     img->linear = quality;
 }
 
@@ -730,13 +832,16 @@ static void Draw(Image *img, float sx1, float sy1, float sx2, float sy2, SDL_FRe
     if (flipY)
         flip |= SDL_FLIP_VERTICAL;
 
+    alpha = SDL_clamp(alpha, 0.0f, 1.0f);
     if (img->tinted)
         SDL_SetTextureColorModFloat(img->tex, img->r, img->g, img->b);
     else
         SDL_SetTextureColorModFloat(img->tex, 1.0f, 1.0f, 1.0f);
-    SDL_SetTextureAlphaModFloat(img->tex, SDL_clamp(alpha, 0.0f, 1.0f));
+    SDL_SetTextureAlphaModFloat(img->tex, alpha);
     SDL_SetTextureBlendMode(img->tex, BlendModeFor(img->mode));
+    SDL_SetTextureScaleMode(img->tex, img->linear ? SDL_SCALEMODE_LINEAR : SDL_SCALEMODE_NEAREST);
     SDL_RenderTextureRotated(s_renderer, img->tex, &src, &dst, -angle, &pivot, (SDL_FlipMode)flip);
+    RecordBlit(img, src, dst, -angle, pivot, (SDL_FlipMode)flip, alpha);
 }
 
 static SDL_FRect Rect(float x, float y, float w, float h)
@@ -802,12 +907,20 @@ void ImgStretchAlphaRect(Image *img, float sx1, float sy1, float sx2, float sy2,
 }
 
 // PTK's primitives use whole-pixel coordinates, and blend (normal alpha) only when `a` is not 1.
+static SDL_BlendMode PrimitiveBlend(float a)
+{
+    return a == 1.0f ? SDL_BLENDMODE_NONE : SDL_BLENDMODE_BLEND;
+}
+
 static void SetDrawColor(float r, float g, float b, float a)
 {
-    SDL_SetRenderDrawBlendMode(s_renderer, a == 1.0f ? SDL_BLENDMODE_NONE : SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawBlendMode(s_renderer, PrimitiveBlend(a));
     SDL_SetRenderDrawColorFloat(s_renderer, SDL_clamp(r, 0.0f, 1.0f), SDL_clamp(g, 0.0f, 1.0f),
                                 SDL_clamp(b, 0.0f, 1.0f), SDL_clamp(a, 0.0f, 1.0f));
 }
+
+static void RecordLine(float x1, float y1, float x2, float y2, float r, float g, float b, float a);
+static void RecordPoint(float x, float y, float r, float g, float b, float a);
 
 void DrawRect(float x1, float y1, float x2, float y2, float r, float g, float b, float a)
 {
@@ -820,18 +933,453 @@ void DrawRect(float x1, float y1, float x2, float y2, float r, float g, float b,
     rect.h = (float)SDL_abs(iy2 - iy1);
     SetDrawColor(r, g, b, a);
     SDL_RenderFillRect(s_renderer, &rect);
+    RecordFill(rect, PrimitiveBlend(a), r, g, b, a);
 }
 
 void DrawLine(float x1, float y1, float x2, float y2, float r, float g, float b, float a)
 {
     SetDrawColor(r, g, b, a);
     SDL_RenderLine(s_renderer, (float)(int)x1, (float)(int)y1, (float)(int)x2, (float)(int)y2);
+    RecordLine((float)(int)x1, (float)(int)y1, (float)(int)x2, (float)(int)y2, r, g, b, a);
 }
 
 void PlotPixel(float x, float y, float r, float g, float b, float a)
 {
     SetDrawColor(r, g, b, a);
     SDL_RenderPoint(s_renderer, (float)(int)x, (float)(int)y);
+    RecordPoint((float)(int)x, (float)(int)y, r, g, b, a);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Interpolation
+//
+// The game ticks at its own rate (SysSetMaxFps), and its logic and drawing are interleaved, so
+// it can't draw a picture between two ticks. Instead, while interpolation is on, each tick's
+// draws are recorded (after being drawn into the back buffer as usual), and SysFlip shows the
+// tick by replaying them: each draw is matched to the draw of the previous tick it continues
+// (same picture and blending, nearest position) and drawn between the two positions, by how far
+// the clock is between the two ticks. The draws go straight into the window at its scale, so
+// movement is smooth to the screen's pixels rather than the back buffer's. Under them goes a
+// copy of the back buffer from before the tick (s_base), for screens that don't redraw
+// everything each tick.
+//
+// The game sees no difference: the back buffer, the tick rate and the input are the same with
+// or without it. The picture shown is up to one tick behind the newest tick.
+// ---------------------------------------------------------------------------------------------
+
+typedef enum CmdType { CMD_BLIT, CMD_FILL, CMD_LINE, CMD_POINT } CmdType;
+
+typedef struct DrawCmd {
+    CmdType type;
+    Image *img;                     // CMD_BLIT
+    SDL_BlendMode blend;
+    SDL_FlipMode flip;
+    bool linear;                    // the image's texture quality
+    float r, g, b, a;               // tint and alpha, or the primitive's colour
+    float x1, y1, x2, y2;           // destination rect edges; the line's ends; the point (x1, y1)
+    float sx1, sy1, sx2, sy2;       // source rect edges
+    float angle;                    // degrees clockwise (SDL's direction)
+    float px, py;                   // rotation centre, from (x1, y1)
+    int prev;                       // the draw it continues in the previous tick's list, or -1
+    bool whole;                     // the source rect changed with the destination (clipping,
+                                    // zoom): both are interpolated; else (a new animation
+                                    // frame) the draw only moves
+    int next;                       // the next draw in the same grid bucket (MatchDraws)
+} DrawCmd;
+
+typedef struct DrawList {
+    DrawCmd *cmds;
+    int count, cap;
+} DrawList;
+
+static DrawList s_lists[2];
+static int      s_curList;          // s_lists[s_curList] is this tick's; the other the last tick's
+
+enum { GRID_BUCKETS = 4096 };       // MatchDraws' spatial hash
+#define GRID_CELL         32.0f     // its cell size, back-buffer pixels
+#define MATCH_DIST        32.0f     // the most a draw's edges move in a tick and still match
+#define NEW_FRAME_PENALTY 8.0f      // prefers the draw of the same animation frame
+static int s_grid[GRID_BUCKETS];
+
+static DrawCmd *NewCmd(CmdType type)
+{
+    DrawList *list = &s_lists[s_curList];
+    DrawCmd *c;
+
+    if (!s_recording)
+        return NULL;
+    if (list->count == list->cap) {
+        int cap = list->cap ? list->cap * 2 : 1024;
+        DrawCmd *cmds = (DrawCmd *)SDL_realloc(list->cmds, cap * sizeof(DrawCmd));
+        if (cmds == NULL) {
+            s_recording = false;    // this tick is shown without interpolation
+            return NULL;
+        }
+        list->cmds = cmds;
+        list->cap = cap;
+    }
+    c = &list->cmds[list->count++];
+    SDL_zerop(c);
+    c->type = type;
+    c->prev = -1;
+    return c;
+}
+
+static void SetCmdColor(DrawCmd *c, float r, float g, float b, float a)
+{
+    c->r = SDL_clamp(r, 0.0f, 1.0f);
+    c->g = SDL_clamp(g, 0.0f, 1.0f);
+    c->b = SDL_clamp(b, 0.0f, 1.0f);
+    c->a = SDL_clamp(a, 0.0f, 1.0f);
+}
+
+static void RecordBlit(Image *img, SDL_FRect src, SDL_FRect dst, float angle, SDL_FPoint pivot,
+                       SDL_FlipMode flip, float alpha)
+{
+    DrawCmd *c = NewCmd(CMD_BLIT);
+
+    if (c == NULL)
+        return;
+    c->img = img;
+    c->blend = BlendModeFor(img->mode);
+    c->flip = flip;
+    c->linear = img->linear;
+    if (img->tinted)
+        SetCmdColor(c, img->r, img->g, img->b, alpha);
+    else
+        SetCmdColor(c, 1.0f, 1.0f, 1.0f, alpha);
+    c->x1 = dst.x;
+    c->y1 = dst.y;
+    c->x2 = dst.x + dst.w;
+    c->y2 = dst.y + dst.h;
+    c->sx1 = src.x;
+    c->sy1 = src.y;
+    c->sx2 = src.x + src.w;
+    c->sy2 = src.y + src.h;
+    c->angle = angle;
+    c->px = pivot.x;
+    c->py = pivot.y;
+}
+
+static void RecordFill(SDL_FRect rect, SDL_BlendMode blend, float r, float g, float b, float a)
+{
+    DrawCmd *c = NewCmd(CMD_FILL);
+
+    if (c == NULL)
+        return;
+    c->blend = blend;
+    SetCmdColor(c, r, g, b, a);
+    c->x1 = rect.x;
+    c->y1 = rect.y;
+    c->x2 = rect.x + rect.w;
+    c->y2 = rect.y + rect.h;
+}
+
+static void RecordLine(float x1, float y1, float x2, float y2, float r, float g, float b, float a)
+{
+    DrawCmd *c = NewCmd(CMD_LINE);
+
+    if (c == NULL)
+        return;
+    c->blend = PrimitiveBlend(a);
+    SetCmdColor(c, r, g, b, a);
+    c->x1 = x1;
+    c->y1 = y1;
+    c->x2 = x2;
+    c->y2 = y2;
+}
+
+static void RecordPoint(float x, float y, float r, float g, float b, float a)
+{
+    DrawCmd *c = NewCmd(CMD_POINT);
+
+    if (c == NULL)
+        return;
+    c->blend = PrimitiveBlend(a);
+    SetCmdColor(c, r, g, b, a);
+    c->x1 = x;
+    c->y1 = y;
+}
+
+// Starts recording a tick. The back buffer as it is now goes under its draws. `fresh`: the last
+// tick wasn't recorded, so there is nothing to continue.
+static void StartRecording(bool fresh)
+{
+    SDL_SetRenderTarget(s_renderer, s_base);
+    SDL_SetTextureScaleMode(s_canvas, SDL_SCALEMODE_NEAREST);
+    SDL_RenderTexture(s_renderer, s_canvas, NULL, NULL);
+    SDL_SetTextureScaleMode(s_canvas, SDL_SCALEMODE_PIXELART);
+    SDL_SetRenderTarget(s_renderer, s_canvas);
+    if (fresh)
+        s_lists[s_curList].count = 0;
+    s_curList ^= 1;
+    s_lists[s_curList].count = 0;
+}
+
+static void CmdCenter(const DrawCmd *c, float *x, float *y)
+{
+    if (c->type == CMD_POINT) {
+        *x = c->x1;
+        *y = c->y1;
+    } else {
+        *x = (c->x1 + c->x2) * 0.5f;
+        *y = (c->y1 + c->y2) * 0.5f;
+    }
+}
+
+static int GridCell(float v)
+{
+    return (int)SDL_floorf(SDL_clamp(v, -1.0e6f, 1.0e6f) / GRID_CELL);
+}
+
+static int GridBucket(int cx, int cy)
+{
+    return (int)(((unsigned)cx * 73856093u ^ (unsigned)cy * 19349663u) % GRID_BUCKETS);
+}
+
+static bool SameKind(const DrawCmd *a, const DrawCmd *b)
+{
+    if (a->type != b->type || a->blend != b->blend)
+        return false;
+    return a->type != CMD_BLIT || (a->img == b->img && a->flip == b->flip);
+}
+
+// How far the draw's edges (or the point) moved.
+static float EdgeDist(const DrawCmd *a, const DrawCmd *b)
+{
+    float d = SDL_max(SDL_fabsf(a->x1 - b->x1), SDL_fabsf(a->y1 - b->y1));
+    if (a->type != CMD_POINT)
+        d = SDL_max(d, SDL_max(SDL_fabsf(a->x2 - b->x2), SDL_fabsf(a->y2 - b->y2)));
+    return d;
+}
+
+static float SrcDist(const DrawCmd *a, const DrawCmd *b)
+{
+    return SDL_max(SDL_max(SDL_fabsf(a->sx1 - b->sx1), SDL_fabsf(a->sy1 - b->sy1)),
+                   SDL_max(SDL_fabsf(a->sx2 - b->sx2), SDL_fabsf(a->sy2 - b->sy2)));
+}
+
+// Matches each draw of this tick to the draw of the previous tick it continues: the same kind,
+// its edges moved least and at most MATCH_DIST. The previous draws are hashed by the grid cell
+// of their centre; a match's centre is at most a cell away.
+static void MatchDraws(void)
+{
+    DrawList *cur = &s_lists[s_curList];
+    DrawList *prev = &s_lists[s_curList ^ 1];
+    int i, j, gx, gy;
+
+    SDL_memset(s_grid, 0xff, sizeof(s_grid));
+    for (i = 0; i < prev->count; i++) {
+        float x, y;
+        int bucket;
+        CmdCenter(&prev->cmds[i], &x, &y);
+        bucket = GridBucket(GridCell(x), GridCell(y));
+        prev->cmds[i].next = s_grid[bucket];
+        s_grid[bucket] = i;
+    }
+    for (i = 0; i < cur->count; i++) {
+        DrawCmd *c = &cur->cmds[i];
+        float x, y, best = MATCH_DIST + 0.001f;
+        int cx, cy;
+
+        c->prev = -1;
+        CmdCenter(c, &x, &y);
+        cx = GridCell(x);
+        cy = GridCell(y);
+        for (gy = cy - 1; gy <= cy + 1; gy++) {
+            for (gx = cx - 1; gx <= cx + 1; gx++) {
+                for (j = s_grid[GridBucket(gx, gy)]; j >= 0; j = prev->cmds[j].next) {
+                    const DrawCmd *p = &prev->cmds[j];
+                    bool whole = true;
+                    float d;
+
+                    if (!SameKind(c, p))
+                        continue;
+                    d = EdgeDist(c, p);
+                    if (c->type == CMD_BLIT && SrcDist(c, p) > d + 0.5f) {
+                        whole = false;
+                        d += NEW_FRAME_PENALTY;
+                    }
+                    if (d < best) {
+                        best = d;
+                        c->prev = j;
+                        c->whole = whole;
+                    }
+                }
+            }
+        }
+    }
+}
+
+static float Lerp(float a, float b, float t)
+{
+    return a + (b - a) * t;
+}
+
+// Moves `c` back towards `p`, its draw in the previous tick, to `t` of the way from `p` to `c`.
+static void Interpolate(DrawCmd *c, const DrawCmd *p, float t)
+{
+    if (c->type != CMD_BLIT || c->whole) {
+        c->x1 = Lerp(p->x1, c->x1, t);
+        c->y1 = Lerp(p->y1, c->y1, t);
+        c->x2 = Lerp(p->x2, c->x2, t);
+        c->y2 = Lerp(p->y2, c->y2, t);
+        if (c->type == CMD_BLIT) {
+            c->sx1 = Lerp(p->sx1, c->sx1, t);
+            c->sy1 = Lerp(p->sy1, c->sy1, t);
+            c->sx2 = Lerp(p->sx2, c->sx2, t);
+            c->sy2 = Lerp(p->sy2, c->sy2, t);
+            c->px = Lerp(p->px, c->px, t);
+            c->py = Lerp(p->py, c->py, t);
+        }
+    } else {
+        float dx = (1.0f - t) * ((p->x1 + p->x2) - (c->x1 + c->x2)) * 0.5f;
+        float dy = (1.0f - t) * ((p->y1 + p->y2) - (c->y1 + c->y2)) * 0.5f;
+        c->x1 += dx;
+        c->x2 += dx;
+        c->y1 += dy;
+        c->y2 += dy;
+    }
+    if (c->type == CMD_BLIT) {
+        float turn = SDL_fmodf(c->angle - p->angle, 360.0f);
+        if (turn > 180.0f)
+            turn -= 360.0f;
+        else if (turn < -180.0f)
+            turn += 360.0f;
+        c->angle -= (1.0f - t) * turn;
+    }
+}
+
+static void ReplayDraw(const DrawCmd *c)
+{
+    SDL_FRect src, dst;
+    SDL_FPoint pivot;
+    bool scaled;
+
+    if (c->type == CMD_BLIT) {
+        SDL_Texture *tex = c->img->tex;
+        if (tex == NULL)            // freed since
+            return;
+        src = Rect(c->sx1, c->sy1, c->sx2 - c->sx1, c->sy2 - c->sy1);
+        dst = Rect(c->x1, c->y1, c->x2 - c->x1, c->y2 - c->y1);
+        pivot.x = c->px;
+        pivot.y = c->py;
+        scaled = c->angle != 0 || SDL_fabsf(dst.w - src.w) > 0.01f || SDL_fabsf(dst.h - src.h) > 0.01f;
+        SDL_SetTextureColorModFloat(tex, c->r, c->g, c->b);
+        SDL_SetTextureAlphaModFloat(tex, c->a);
+        SDL_SetTextureBlendMode(tex, c->blend);
+        // Unscaled blits get the back buffer's pixel-art scaling, so they look the same.
+        SDL_SetTextureScaleMode(tex, c->linear && scaled ? SDL_SCALEMODE_LINEAR : SDL_SCALEMODE_PIXELART);
+        SDL_RenderTextureRotated(s_renderer, tex, &src, &dst, c->angle, &pivot, c->flip);
+        return;
+    }
+    SDL_SetRenderDrawBlendMode(s_renderer, c->blend);
+    SDL_SetRenderDrawColorFloat(s_renderer, c->r, c->g, c->b, c->a);
+    if (c->type == CMD_FILL) {
+        dst = Rect(c->x1, c->y1, c->x2 - c->x1, c->y2 - c->y1);
+        SDL_RenderFillRect(s_renderer, &dst);
+    } else if (c->type == CMD_LINE) {
+        SDL_RenderLine(s_renderer, c->x1, c->y1, c->x2, c->y2);
+    } else {
+        SDL_RenderPoint(s_renderer, c->x1, c->y1);
+    }
+}
+
+// Draws the tick `t` of the way from the previous tick into the window, letterboxed.
+static void RenderInterpolated(float t)
+{
+    const DrawList *cur = &s_lists[s_curList];
+    const DrawList *prev = &s_lists[s_curList ^ 1];
+    SDL_FRect out = OutputRect();
+    SDL_FRect all = Rect(0, 0, (float)s_width, (float)s_height);
+    SDL_FRect dst;
+    int w = (int)SDL_roundf(out.w), h = (int)SDL_roundf(out.h);
+    int i;
+
+    SDL_SetRenderTarget(s_renderer, NULL);
+    SDL_SetRenderDrawColor(s_renderer, 0, 0, 0, 255);
+    SDL_RenderClear(s_renderer);
+    if (w <= 0 || h <= 0)
+        return;
+    // Drawn into a texture of the picture's size in window pixels, which clips to it. (The
+    // renderer's viewport would not do: SDL multiplies its position by the render scale.)
+    if (s_view == NULL || s_view->w != w || s_view->h != h) {
+        SDL_DestroyTexture(s_view);
+        s_view = SDL_CreateTexture(s_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET, w, h);
+        if (s_view == NULL)
+            return;
+        SDL_SetTextureBlendMode(s_view, SDL_BLENDMODE_NONE);
+        SDL_SetTextureScaleMode(s_view, SDL_SCALEMODE_NEAREST);
+    }
+    SDL_SetRenderTarget(s_renderer, s_view);
+    SDL_SetRenderScale(s_renderer, (float)w / s_width, (float)h / s_height);
+    SDL_RenderTexture(s_renderer, s_base, NULL, &all);
+    for (i = 0; i < cur->count; i++) {
+        DrawCmd c = cur->cmds[i];
+        if (c.prev >= 0)
+            Interpolate(&c, &prev->cmds[c.prev], t);
+        ReplayDraw(&c);
+    }
+    SDL_SetRenderScale(s_renderer, 1.0f, 1.0f);
+    SDL_SetRenderTarget(s_renderer, NULL);
+    dst = Rect(SDL_roundf(out.x), SDL_roundf(out.y), (float)w, (float)h);
+    SDL_RenderTexture(s_renderer, s_view, NULL, &dst);
+}
+
+// Shows the recorded tick, interpolated, until the next tick is due. The ticks keep the frame
+// cap's rate on the clock (s_tickDueNs); a present that runs late is made up on the next ticks.
+static void FlipInterpolated(void)
+{
+    Uint64 tickNs = (Uint64)s_frameMs * SDL_NS_PER_MS;
+    Uint64 due = s_tickDueNs + tickNs;          // when the next tick is due
+    Uint64 frameNs = 0;                         // without vsync: the refresh period
+    Uint64 now;
+    bool shown = false;
+
+    MatchDraws();
+    if (!s_vsync) {
+        float hz = RefreshRate();
+        frameNs = (Uint64)(SDL_NS_PER_SECOND / (hz > 0 ? hz : 60.0f));
+    }
+    for (;;) {
+        float t;
+
+        SysProcessEvents();
+        now = SDL_GetTicksNS();
+        if (s_quit || !s_focused)
+            break;
+        if (frameNs) {
+            // Without vsync, frames keep their own clock at the refresh rate, across ticks.
+            if (now > s_nextFrameNs + frameNs || now + frameNs < s_nextFrameNs)
+                s_nextFrameNs = now;
+            if (s_nextFrameNs >= due)
+                break;
+            if (now < s_nextFrameNs) {
+                SDL_DelayPrecise(s_nextFrameNs - now);
+                now = SDL_GetTicksNS();
+            }
+            s_nextFrameNs += frameNs;
+        } else if (now >= due && (shown || now >= due + tickNs)) {
+            // With vsync: at least one frame per tick, unless more than a tick behind.
+            break;
+        }
+        t = (float)(Sint64)(now - s_tickDueNs) / (float)tickNs;
+        RenderInterpolated(SDL_clamp(t, 0.0f, 1.0f));
+        SDL_RenderPresent(s_renderer);
+        shown = true;
+    }
+    SDL_SetRenderTarget(s_renderer, s_canvas);
+
+    if (!s_focused) {
+        WaitForFocus();
+        due = SDL_GetTicksNS();
+    }
+    now = SDL_GetTicksNS();
+    // Far behind (a slow tick, loading): the lost time is dropped rather than caught up.
+    if (now > due + 4 * tickNs)
+        due = now;
+    s_tickDueNs = due;
+    s_lastFlipNs = now;
 }
 
 // ---------------------------------------------------------------------------------------------

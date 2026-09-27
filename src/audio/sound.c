@@ -468,8 +468,6 @@ AudioHandle LoadSample(const char *name, AudioHandle max)
     int flags;
 
     flags = 0;                                   // SampleLoad flags (a busy sample steals its quietest voice)
-    if (g_cfg.soundMode != SOUND_MODE_HARDWARE)
-        flags = flags | AUDIO_SAMPLE_SOFTWARE;       // software mixing unless SOUND_MODE_HARDWARE
     TRY_LOAD_SAMPLE_CASCADE(flags, max);
     if (sample == 0) {
         sprintf(g_pathBuf, "SAMPLE LOAD ERROR: %s\r\n", name);
@@ -486,8 +484,6 @@ AudioHandle LoadSampleLoop(const char *name, AudioHandle max)
     int flags;
 
     flags = AUDIO_SAMPLE_LOOP;                      // SampleLoad flags: LoadSample()'s flags plus the loop bit
-    if (g_cfg.soundMode != SOUND_MODE_HARDWARE)
-        flags = flags | AUDIO_SAMPLE_SOFTWARE;       // software mixing unless SOUND_MODE_HARDWARE
     TRY_LOAD_SAMPLE_CASCADE(flags, max);
     if (sample == 0) {
         sprintf(g_pathBuf, "SAMPLE LOAD ERROR: %s\r\n", name);
@@ -658,8 +654,6 @@ AudioHandle LoadVoiceSample(const char *name, int mode)
     int flags;
 
     flags = 0;                                    // SampleLoad flags (a busy sample steals its quietest voice)
-    if (g_cfg.soundMode != SOUND_MODE_HARDWARE)
-        flags = flags | AUDIO_SAMPLE_SOFTWARE;
     if (mode == 1) {
         TRY_LOAD_VOICE_CASCADE(VoicePath);
     }

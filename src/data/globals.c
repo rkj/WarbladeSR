@@ -703,8 +703,6 @@ int g_shipStats8[1065] = {225, 9, 27, 45, 56, 4, 8, 631, 58};
 unsigned int g_screenW = 800u;
 #pragma data_seg(".data$g7d32fc")
 unsigned int g_screenH = 600u;
-#pragma data_seg(".data$g7d3300")
-int g_windowBpp = 16;
 #pragma data_seg(".data$g7d3304")
 float g_worldZoomInit = 1.0f;
 #pragma data_seg(".data$g7d3308")
@@ -1665,8 +1663,6 @@ unsigned char g_joy0;
 unsigned char g_joy1;
 #pragma bss_seg(".bss$ge10fce")
 unsigned char g_windowed;
-#pragma bss_seg(".bss$ge10fcf")
-bool g_windowedAtStartup;
 #pragma bss_seg(".bss$ge10fd0")
 unsigned char g_pad_e10fd0[8];
 #pragma bss_seg(".bss$ge10fd8")

@@ -22,9 +22,8 @@ void DrawMenuPrompt()
     if (g_timeTrialLocked != 0 && g_timeTrialDeadline > g_time)
         DrawTinyText("TIME TRIAL IS UNAVAILABLE, PLEASE REGISTER FOR THE FULL VERSION",
                            POS_CENTERED, g_screenH - 0x34, 1);
-    if (g_uiBlink != 0 && (g_windowBpp != g_cfg.bpp || g_restartNeeded ||
-                            g_windowRenderer != RendererChoiceOf(g_cfg.renderer) ||
-                            g_windowed != g_cfg.windowed)) {
+    if (g_uiBlink != 0 && (g_restartNeeded ||
+                            g_windowRenderer != RendererChoiceOf(g_cfg.renderer))) {
         if (RandRange(0, 100) < 50)
             DrawMenuText("GAME MUST BE RESTARTED FOR CHANGES TO TAKE EFFECT", POS_CENTERED, g_screenH - 0x38, 0);
         else
@@ -85,7 +84,7 @@ void ShowLogoSplash()
 
         SysFlip();
         SysProcessEvents();
-    } while (!done);
+    } while (!done && !SysQuitRequested());
 }
 
 // Shows the game's title splash image; same fade/skip behavior as ShowLogoSplash().
@@ -132,7 +131,7 @@ void ShowTitleSplash()
 
         SysFlip();
         SysProcessEvents();
-    } while (!done);
+    } while (!done && !SysQuitRequested());
 }
 
 // Always-ready stub for a screen's "is ready" callback.

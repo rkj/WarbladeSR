@@ -1,7 +1,9 @@
 # Warblade, SDL port (SDL_PLAN.md). VS2026 (MSVC, x64 or x86) + vcpkg; run build.bat rather than
 # configuring by hand. The engine underneath include/sdlhelp.h is SDL3, SDL3_image and
-# SDL3_mixer (src/core/sdl.c, src/core/sdl_audio.c).
+# SDL3_mixer (src/core/sdl.c, src/core/sdl_audio.c), linked statically (vcpkg triplet
+# x64-windows-static or x86-windows-static) with the static C runtime: warblade.exe needs no DLLs but Windows'.
 cmake_minimum_required(VERSION 3.25)
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")   # /MT, /MTd
 project(warblade C)
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -13,7 +15,7 @@ else()
     set(_game_dir "${CMAKE_SOURCE_DIR}/../game")
 endif()
 set(WARBLADE_GAME_DIR "${_game_dir}" CACHE PATH
-    "The original install: data/ is linked into the output folder, the icon and jukebox are copied from it")
+    "The original install: data/ is linked into the output folder, the icon is copied from it")
 if(NOT EXISTS "${WARBLADE_GAME_DIR}/warblade.ico")
     message(FATAL_ERROR "warblade.ico not found in ${WARBLADE_GAME_DIR}: "
                         "set WARBLADE_GAME_DIR to your Warblade folder")
@@ -53,11 +55,10 @@ if(WARBLADE_ASAN)
     endif()
 endif()
 
-# Next to the exe: the triplet's DLLs (all of them: SDL3_mixer loads libxmp.dll at run time),
-# warblade.ico and the jukebox from the install, the ASan runtime, and a junction to its data/.
-set(_vcpkg_bin "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}$<$<CONFIG:Debug>:/debug>/bin")
+# Next to the exe: warblade.ico from the install, the ASan runtime, and a junction to its data/
+# (cmake/postbuild.cmake).
 add_custom_command(TARGET warblade POST_BUILD
-    COMMAND ${CMAKE_COMMAND} "-DVCPKG_BIN=${_vcpkg_bin}" "-DGAME=${WARBLADE_GAME_DIR}"
+    COMMAND ${CMAKE_COMMAND} "-DGAME=${WARBLADE_GAME_DIR}"
             "-DEXTRA=${ASAN_DLLS}" "-DDST=$<TARGET_FILE_DIR:warblade>"
             -P "${CMAKE_SOURCE_DIR}/cmake/postbuild.cmake"
     VERBATIM)

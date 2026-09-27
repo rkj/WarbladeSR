@@ -40,7 +40,7 @@ void AboutScreen()
     Blit((g_screenW >> 1) + 0x62, 4, 0, g_gfxLogos, 0x30, 0x11e, 0x30, 0x2c);
 
     g_textCursorY = g_textCursorY + 0x22;
-    DrawMenuText("WARBLADE VERSION 1.34", POS_CENTERED, g_textAutoY, 0);
+    DrawMenuText("WARBLADE VERSION 1.34 SR1", POS_CENTERED, g_textAutoY, 0);
     g_textCursorY = g_textCursorY + 8;
     DrawTinyText("  CODING, GFX, SFX AND GAME DESIGN  ", POS_CENTERED, g_textAutoY, 3);
     g_textCursorY = g_textCursorY + 2;
@@ -97,6 +97,11 @@ void AboutScreen()
     DrawTinyText("@S014SHANE R MONROE@E", POS_CENTERED, g_textAutoY, 4);
     g_textCursorY = g_textCursorY + 0xd;
     DrawTinyText("AND A BIG THANK YOU TO ALL THAT SUPPORTED ME AND BELIEVED IN ME!", POS_CENTERED, g_textAutoY, 4);
+    g_textCursorY = g_textCursorY + 10;
+
+    DrawTinyText("DECOMPILER", POS_CENTERED, g_textAutoY, 3);
+    g_textCursorY = g_textCursorY + 4;
+    DrawTinyText("@S026BEPIS@E", POS_CENTERED, g_textAutoY, 4);
     g_textCursorY = g_textCursorY + 0x10;
 
     if (g_cfg.playTime < 0)
@@ -164,6 +169,9 @@ void AboutScreen()
 
     if (g_linkHover && g_mouseClick != 0) {
         // ---- link click ----
+        // Consume the press: after a link minimizes the window, the mouse position is still over
+        // the link on restore, and a live latch would follow the link again.
+        g_linkHover = false;
         switch (sel) { // sel is the id of the clicked credit-link entry (@Snnn marker in the credits text above)
         case 1: // Edgar Vigdal
             g_curWin = WinOpen(POS_CENTERED, POS_CENTERED, 300, 300, WIN_MODE_SLIDING);
@@ -317,6 +325,21 @@ void AboutScreen()
             OpenUrl("https://www.libsdl.org/");
             SysMinimize();
             break;
+
+        case 26: // decompiler credit
+            SoundPause();
+            g_lastActivityTime = g_time;
+            g_attractScreen = ATTRACT_ABOUT;
+            g_idleTimeoutMs = 15000;
+            WriteHiscoreFile();
+            ClearHiscores();
+            g_mouseDown = 0;
+            g_transitionLockUntil = g_time + TRANSITION_LOCK_MS;
+            g_transitionLock = 1;
+            BeforeOpenLink();
+            OpenUrl("https://github.com/bbepis/WarbladeSR");
+            SysMinimize();
+            break;
         }
     }
 
@@ -373,7 +396,7 @@ void HelpControls()
     int unused2 = 300;
     int lineStep = 3;
     int voice;
-    int bytesPerPixel;
+    int bytesPerPixel = 4;  // textures are 32-bit
     int minMem;
     int maxMem;
 
@@ -515,16 +538,6 @@ void HelpControls()
     DrawTinyText("     . . ....                              ", POS_CENTERED, g_curY, 2);
     g_textCursorY = g_textCursorY + lineStep;
 
-    // ---- D: color resolution ----
-    if (g_cfg.bpp == 8)
-        DrawTinyText("D            COLOR RESOLUTION       : 8 BIT", POS_CENTERED, g_textAutoY, 3);
-    if (g_cfg.bpp == 16)
-        DrawTinyText("D            COLOR RESOLUTION       :16 BIT", POS_CENTERED, g_textAutoY, 3);
-    if (g_cfg.bpp == 32)
-        DrawTinyText("D            COLOR RESOLUTION       :32 BIT", POS_CENTERED, g_textAutoY, 3);
-    DrawTinyText(" ............                              ", POS_CENTERED, g_curY, 2);
-    g_textCursorY = g_textCursorY + lineStep;
-
     // ---- N: star count ----
     sprintf(g_logBuf, "N            NUMBER OF STARS        :%-4d  ", (int)g_cfg.numStars);
     DrawTinyText(g_logBuf, POS_CENTERED, g_textAutoY, 3);
@@ -587,13 +600,34 @@ void HelpControls()
     DrawTinyText("  ...........                              ", POS_CENTERED, g_curY, 2);
     g_textCursorY = g_textCursorY + lineStep;
 
-    // ---- renderer (the original's ALT+T DirectX/OpenGL line; set with the RENDER button) ----
+    // ---- renderer (the original's ALT+T DirectX/OpenGL line; set with the renderer button beside it) ----
     {
         static const char *const values[RENDERER_COUNT] = {
             "AUTO    ", "AUTO    ", "DX9     ", "DX11    ", "DX12    ", "OPENGL  ", "VULKAN  "
         };
         sprintf(g_logBuf, "               RENDERER               :%s", values[RendererChoiceOf(g_cfg.renderer)]);
         DrawTinyText(g_logBuf, POS_CENTERED, g_textAutoY, 3);
+        g_textCursorY = g_textCursorY + lineStep;
+    }
+
+    // ---- vsync and interpolation (SDL port; set with the buttons beside them, or ALT + V
+    // and S) ----
+    sprintf(g_logBuf, "  ALT + V      VSYNC                  :%s", g_cfg.vsyncOff == 1 ? "OFF     " : "ON      ");
+    DrawTinyText(g_logBuf, POS_CENTERED, g_textAutoY, 3);
+    DrawTinyText("     . . ......                                ", POS_CENTERED, g_curY, 2);
+    g_textCursorY = g_textCursorY + lineStep;
+    {
+        const char *mode = "AUTO";
+        if (g_cfg.interpolation == SYS_INTERP_ON)
+            mode = "ON";
+        else if (g_cfg.interpolation == SYS_INTERP_OFF)
+            mode = "OFF";
+        // Auto also shows what it chose for this display.
+        sprintf(g_logBuf, "  S            INTERPOLATION          :%-4s%-4s", mode,
+                g_cfg.interpolation == SYS_INTERP_ON || g_cfg.interpolation == SYS_INTERP_OFF ? ""
+                    : SysInterpolating() ? " ON" : " OFF");
+        DrawTinyText(g_logBuf, POS_CENTERED, g_textAutoY, 3);
+        DrawTinyText("   ............                                ", POS_CENTERED, g_curY, 2);
         g_textCursorY = g_textCursorY + lineStep;
     }
 
@@ -627,14 +661,8 @@ void HelpControls()
     else
         DrawTinyText("    W            TOGGLE SCREEN MODE     :FULLSCREEN", POS_CENTERED, g_textAutoY, 3);
     DrawTinyText(" ............                              ", POS_CENTERED, g_curY, 2);
-    g_textCursorY = g_textCursorY + lineStep;
-
-    // ---- S: sound mixer ----
-    if (g_cfg.soundMode == SOUND_MODE_HARDWARE)
-        DrawTinyText("  S            TOGGLE SOUNDMIXER      :HARDWARE", POS_CENTERED, g_textAutoY, 3);
-    else
-        DrawTinyText("  S            TOGGLE SOUNDMIXER      :SOFTWARE", POS_CENTERED, g_textAutoY, 3);
-    DrawTinyText(" ............                              ", POS_CENTERED, g_curY, 2);
+    // (The last line was "S  TOGGLE SOUNDMIXER : HARDWARE/SOFTWARE", BASS's sample mixing,
+    // before the SDL port.)
 
     // ---- current control bindings banner (after a swap) ----
     if (g_time < g_bindingsBannerUntil) {
@@ -649,7 +677,6 @@ void HelpControls()
     // ---- estimated alien-graphics memory usage ----
     if (g_time < g_memUntil) {
         g_textCursorY = g_textCursorY + 10;
-        bytesPerPixel = g_cfg.bpp / 8;
         // rough min/max estimate: alienBuffer frames at a small (576x96) vs. full (1024x1024)
         // sprite sheet size
         minMem = g_cfg.alienBuffer * 576 * 96 * bytesPerPixel * 2 * 6 + g_cfg.alienBuffer * 576 * 96 * 6;
@@ -1357,7 +1384,7 @@ void BonusScreen()
         TIP(1, "CREATE A PROFILE TO RECORD YOUR PROGRESS", "AND UNLOCK NEW FEATURES IN THE GAME!")
         TIP(2, "USE THE GRAPHICS BUFFER SYSTEM TO LOAD LEVEL", "DATA TO MEMORY AND GET A SMOOTHER GAME!")
         TIP(3, "REMEMBER TO RESTART THE GAME AFTER CHANGING",
-            "MAJOR SETTINGS LIKE SCREENMODE AND LEVEL BUFFERING!")
+            "MAJOR SETTINGS LIKE LEVEL BUFFERING!")
         if (g_tipIndex == 4) {
             DrawMenuText("YOU CAN SAVE THE GAME AT THE SHOP", POS_CENTERED, 0x226, 5);
             DrawMenuText("", g_textStartX, 0x235, 5);

@@ -266,9 +266,9 @@ void PauseGame()
 // mode (+Shift: background tint, +Alt: nebula toggle), TAB/profile-input opens the
 // profile window (submitting session stats first), V cycles the announcer voice, E/N
 // (+Shift to reverse) adjust spark/star counts, F toggles flare particles (+Alt+Shift:
-// FPS display), I cycles bullet-render intensity, Z toggles point/flare stars, M cycles
-// the music format, U toggles voice on/off, and PageUp/Down, +/-, Home/End adjust the
-// sfx/music/voice volumes.
+// FPS display), I cycles bullet-render intensity, Z toggles point/flare stars, W toggles
+// fullscreen, S cycles interpolation, Alt+V toggles vsync, M cycles the music format, U toggles voice on/off, and PageUp/Down, +/-,
+// Home/End adjust the sfx/music/voice volumes.
 void Hotkeys()
 {
     int voice;
@@ -385,6 +385,34 @@ void Hotkeys()
         }
     } else {
         g_keyLatch[K_VK_B] = 1;
+    }
+
+    // ---- W: toggle fullscreen / windowed (same as the title screen's W) ----
+    if (KeyDown(K_VK_W) == true && IsKeyFree(K_VK_W)) {
+        if (g_keyLatch[K_VK_W] != 0) {
+            g_cfg.windowed = !g_cfg.windowed;
+            SysSetFullscreen(!g_cfg.windowed);
+            sprintf(g_optionMsg, g_cfg.windowed ? "SCREEN MODE : WINDOWED" : "SCREEN MODE : FULLSCREEN");
+            g_msgTime = g_time + MSG_DURATION_MS;
+            MergeSettings(g_profileIndex);
+            WriteSettings();
+            g_keyLatch[K_VK_W] = 0;
+            PlayClick();
+        }
+    } else {
+        g_keyLatch[K_VK_W] = 1;
+    }
+
+    // ---- S: cycle interpolation (same as the title screen's S) ----
+    if (KeyDown(K_VK_S) == true && IsKeyFree(K_VK_S)) {
+        if (g_keyLatch[K_VK_S] != 0) {
+            sprintf(g_optionMsg, "%s", CycleInterpolation());
+            g_msgTime = g_time + MSG_DURATION_MS;
+            g_keyLatch[K_VK_S] = 0;
+            PlayClick();
+        }
+    } else {
+        g_keyLatch[K_VK_S] = 1;
     }
 
     // ---- P: pause ----
@@ -512,6 +540,15 @@ void Hotkeys()
         }
     } else {
         g_save.players[g_curPlayer].keyLatchProfile = 1;
+    }
+
+    // ---- ALT + V: toggle vsync (plain V below skips Alt, and resets the shared latch) ----
+    if (KeyDown(K_VK_MENU) == true && KeyDown(K_VK_V) == true && IsKeyFree(K_VK_V) &&
+        g_keyLatch[K_VK_V] != 0) {
+        sprintf(g_optionMsg, "%s", ToggleVSync());
+        g_msgTime = g_time + MSG_DURATION_MS;
+        g_keyLatch[K_VK_V] = 0;
+        PlayClick();
     }
 
     // ---- V: announcer voice ----
@@ -894,7 +931,7 @@ void GameFrame()
     g_prevMouseY = g_mouseY;
     g_mouseX = MouseX();
     g_mouseY = MouseY();
-    if (!g_windowedAtStartup) {
+    if (!g_windowed) {
         ClipCursorOn();
         if (g_mouseX < 0) MouseWarp(0, g_mouseY);
         g_mouseX = MouseX();

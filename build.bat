@@ -4,7 +4,8 @@ rem   build.bat [release]   build\vs2026-release\warblade.exe
 rem   build.bat debug       build\vs2026-debug\warblade.exe
 rem   build.bat asan        build\vs2026-asan\warblade.exe (Debug, /fsanitize=address)
 rem   build.bat ... x86     32-bit build in build\vs2026-x86-<config>\
-rem The output folder is runnable: DLLs next to the exe, data\ is a junction to ..\game\data.
+rem SDL3 and its libraries are linked statically (triplet <arch>-windows-static, static CRT),
+rem so warblade.exe needs no DLLs. The output folder is runnable: data\ is a junction to ..\game\data.
 setlocal
 set "CFG=Release" & set "ASAN=OFF" & set "B=release" & set "ARCH=x64"
 for %%a in (%*) do (
@@ -18,8 +19,16 @@ for /f "usebackq delims=" %%i in (`vswhere -latest -version [18.0^,19.0^) -requi
 if not defined VS (echo Visual Studio 2026 with the C++ workload was not found & exit /b 1)
 call "%VS%\VC\Auxiliary\Build\vcvarsall.bat" %ARCH% >nul || exit /b 1
 cd /d "%~dp0"
+set "TRIPLET=%ARCH%-windows-static"
+rem A folder configured for another triplet (the old DLL build) is configured again.
+if exist "build\vs2026-%B%\CMakeCache.txt" (
+  findstr /x /c:"VCPKG_TARGET_TRIPLET:STRING=%TRIPLET%" "build\vs2026-%B%\CMakeCache.txt" >nul || (
+    del "build\vs2026-%B%\CMakeCache.txt" "build\vs2026-%B%\build.ninja"
+    rmdir /s /q "build\vs2026-%B%\CMakeFiles"
+  )
+)
 if not exist "build\vs2026-%B%\build.ninja" (
   cmake -S . -B "build\vs2026-%B%" -G Ninja -DCMAKE_BUILD_TYPE=%CFG% -DWARBLADE_ASAN=%ASAN% ^
-    -DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=%ARCH%-windows || exit /b 1
+    -DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=%TRIPLET% || exit /b 1
 )
 cmake --build "build\vs2026-%B%" || exit /b 1

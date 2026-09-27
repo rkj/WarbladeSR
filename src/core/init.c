@@ -13,13 +13,9 @@
 // The configured renderer is tried first; if SDL can't create it (not built in, or no driver
 // for it on this machine), the setting goes back to auto and SDL picks one.
 
-// SDL_HINT_RENDER_DRIVER value and settings-page label per RendererChoice.
+// SDL_HINT_RENDER_DRIVER value per RendererChoice.
 static const char *const s_rendererHints[RENDERER_COUNT] = {
     0, 0, "direct3d", "direct3d11", "direct3d12", "opengl", "vulkan"
-};
-static const char *const s_rendererLabels[RENDERER_COUNT] = {
-    "RENDER: AUTO", "RENDER: AUTO", "RENDER: DIRECTX 9", "RENDER: DIRECTX 11",
-    "RENDER: DIRECTX 12", "RENDER: OPENGL", "RENDER: VULKAN"
 };
 
 // The choice a stored g_cfg.renderer byte stands for: RENDERER_AUTO unless it names a driver.
@@ -28,14 +24,47 @@ int RendererChoiceOf(int value)
     return value > RENDERER_AUTO && value < RENDERER_COUNT ? value : RENDERER_AUTO;
 }
 
-const char *RendererLabel(int choice)
+// Passes the vsync and interpolation settings to the engine; they apply from the next frame.
+void ApplyFrameSettings(void)
 {
-    return s_rendererLabels[RendererChoiceOf(choice)];
+    SysSetVSync(g_cfg.vsyncOff != 1);
+    SysSetInterpolation(g_cfg.interpolation);
+}
+
+// ALT + V (title screen and in game) and the settings-page button: toggles vsync, applies
+// it and saves the settings. Returns the hotkey banner text.
+const char *ToggleVSync(void)
+{
+    g_cfg.vsyncOff = g_cfg.vsyncOff == 1 ? 0 : 1;
+    ApplyFrameSettings();
+    MergeSettings(g_profileIndex);
+    WriteSettings();
+    return g_cfg.vsyncOff == 1 ? "VSYNC : OFF" : "VSYNC : ON";
+}
+
+// The S key (title screen and in game) and the settings-page button: cycles interpolation
+// auto -> on -> off, applies it and saves the settings. Returns the hotkey banner text; auto
+// also says what it chose.
+const char *CycleInterpolation(void)
+{
+    g_cfg.interpolation = (unsigned char)(g_cfg.interpolation + 1);
+    if (g_cfg.interpolation >= SYS_INTERP_COUNT)
+        g_cfg.interpolation = SYS_INTERP_AUTO;
+    ApplyFrameSettings();
+    MergeSettings(g_profileIndex);
+    WriteSettings();
+    if (g_cfg.interpolation == SYS_INTERP_ON)
+        return "INTERPOLATION : ON";
+    if (g_cfg.interpolation == SYS_INTERP_OFF)
+        return "INTERPOLATION : OFF";
+    return SysInterpolating() ? "INTERPOLATION : AUTO - ON" : "INTERPOLATION : AUTO - OFF";
 }
 
 bool InitWindow(bool windowed)
 {
     int renderer = RendererChoiceOf(g_cfg.renderer);
+
+    ApplyFrameSettings();
 
     g_screenW = 800;
     g_screenH = 600;
@@ -44,13 +73,8 @@ bool InitWindow(bool windowed)
     g_worldZoom = g_worldZoomInit;
 
     g_cfg.windowed = windowed;
-    g_windowedAtStartup = windowed;
-    g_windowBpp = 16;
-    if (g_cfg.bpp == 32)
-        g_windowBpp = 32;
     if (renderer != RENDERER_AUTO &&
-        !SysCreateWindow(g_screenW, g_screenH, g_windowBpp, windowed, "Warblade 1.34",
-                         s_rendererHints[renderer])) {
+        !SysCreateWindow(g_screenW, g_screenH, windowed, "Warblade 1.34 SR1", s_rendererHints[renderer])) {
         sprintf(g_logBuf, "ERROR :  Could not create the %s renderer, using auto\n",
                 s_rendererHints[renderer]);
         LogPrint(g_logBuf);
@@ -59,7 +83,7 @@ bool InitWindow(bool windowed)
         WriteSettings();
     }
     if (renderer == RENDERER_AUTO &&
-        !SysCreateWindow(g_screenW, g_screenH, g_windowBpp, windowed, "Warblade 1.34", 0)) {
+        !SysCreateWindow(g_screenW, g_screenH, windowed, "Warblade 1.34 SR1", 0)) {
         LogPrint("ERROR :  Could not open window\n");
         return false;
     }
@@ -116,7 +140,7 @@ int LoadGameData()
     SysFlip();
     SysSetClearColor(0, 0, 0, 1.0f);
     SysSetWorldView(g_worldViewX, g_worldViewY, g_worldViewRotation, g_worldZoom, true);
-    DrawMenuText("WARBLADE VERSION 1.34", POS_CENTERED, 0x10e, 2);
+    DrawMenuText("WARBLADE VERSION 1.34 SR1", POS_CENTERED, 0x10e, 2);
     DrawMenuText("L O A D I N G   D A T A", POS_CENTERED, 0x136, 2);
     FlushBlit(0);
     FlushQuads(0);

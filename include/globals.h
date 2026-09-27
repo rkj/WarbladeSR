@@ -294,7 +294,6 @@ extern int g_shipStats4[];
 extern int g_shipStats8[];
 extern unsigned int g_screenW;
 extern unsigned int g_screenH;
-extern int g_windowBpp;
 extern float g_worldZoomInit;
 extern float g_worldZoom;
 extern unsigned int g_exitSoundStartTime;

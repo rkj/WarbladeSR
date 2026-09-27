@@ -73,7 +73,7 @@ int GameMain()
     g_items[140].alive = 5;
     MakeGameDir();
     LogInit();
-    LogPrint("WarBlade v1.34, Copyright 1999-2009 Edgar M Vigdal\r\n");
+    LogPrint("WarBlade v1.34 SR1, Copyright 1999-2009 Edgar M Vigdal\r\n");
 
     HidePointer();
     LogPrint("Hide mouse curosr is passed...\r\n");
@@ -274,9 +274,12 @@ int GameMain()
     CheckTimeTrialAvailable();
     BufferAllLevels();
     LogPrint("Preoading of all level data is passed...\r\n");
-    ShowLogoSplash();
+    // The close box works from here on: the splashes end early and the main loop never runs.
+    if (!SysQuitRequested())
+        ShowLogoSplash();
     LogPrint("EMV Software splash is passed...\r\n");
-    ShowTitleSplash();
+    if (!SysQuitRequested())
+        ShowTitleSplash();
     LogPrint("Game splash is passed...\r\n");
 
     // Menu/intro state, then the login/profile prompts shown before the title screen.
@@ -343,7 +346,7 @@ int GameMain()
     g_saveMagic = 12345;
 
     // Main loop: input, GameFrame, render/present, repeat until the window quits.
-    do {
+    while (!SysQuitRequested()) {
         if (g_autoplay) {
             g_frameDt = 3.0f;
         } else {
@@ -418,7 +421,7 @@ int GameMain()
             AudioUpdate();
         }
         SysProcessEvents();
-    } while (!SysQuitRequested());
+    }
 
     // Shutdown: tear down and log the alien gfx/hitmask allocation counters.
     Shutdown();
@@ -544,7 +547,7 @@ void LogCrashReport(const char *reason)
     LogPrint("\r\n");
     LogPrint("\r\n");
     LogPrint("\r\n");
-    LogPrint("## CRASH ## v1.34\r\n");
+    LogPrint("## CRASH ## v1.34 SR1\r\n");
     LogPrint("Version : FULL VERSION\r\n");
     LogPrint("\r\n");
     sprintf(sMsg, "Program State: %d\r\n", g_state);

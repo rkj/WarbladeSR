@@ -1,11 +1,20 @@
-# Makes the build folder runnable: cmake -DVCPKG_BIN=... -DGAME=... -DEXTRA=... -DDST=... -P postbuild.cmake
-#   VCPKG_BIN  the triplet's bin/ (every DLL is copied: SDL3_mixer loads libxmp.dll at run time)
-#   GAME       the original install: warblade.ico and the jukebox (Jukebox.exe, fmod.dll) are
-#              copied, data/ is linked (junction)
+# Makes the build folder runnable: cmake -DGAME=... -DEXTRA=... -DDST=... -P postbuild.cmake
+#   GAME       the original install: warblade.ico is copied, data/ is linked (junction). The
+#              jukebox (Jukebox.exe, fmod.dll) is not: players use the one in their install.
 #   EXTRA      more files to copy (the ASan runtime)
-file(GLOB dlls "${VCPKG_BIN}/*.dll")
-file(COPY ${dlls} ${EXTRA} "${GAME}/warblade.ico" "${GAME}/Jukebox.exe" "${GAME}/fmod.dll"
-     DESTINATION "${DST}")
+#   DST        the output folder
+#
+# SDL3 and its libraries are linked into warblade.exe (an x64- or x86-windows-static triplet), so there
+# are no DLLs to copy. Older builds linked them dynamically; their DLLs, and the jukebox they
+# copied, are removed.
+set(stale
+    SDL3.dll SDL3_image.dll SDL3_mixer.dll jpeg62.dll libpng16.dll libpng16d.dll z.dll zd.dll
+    mpg123.dll libxmp.dll turbojpeg.dll spng.dll out123.dll syn123.dll Jukebox.exe fmod.dll)
+foreach(name IN LISTS stale)
+    file(REMOVE "${DST}/${name}")
+endforeach()
+
+file(COPY ${EXTRA} "${GAME}/warblade.ico" DESTINATION "${DST}")
 if(NOT EXISTS "${DST}/data")
     file(TO_NATIVE_PATH "${DST}/data" link)
     file(TO_NATIVE_PATH "${GAME}/data" target)

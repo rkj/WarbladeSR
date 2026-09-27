@@ -23,10 +23,9 @@ void SysInit(void);                 // first call of all (KMiscTools::initMiscTo
 
 // Creates the game window and its w x h back buffer, which the game draws into and which keeps
 // its contents between frames. Fullscreen shows it scaled to the screen, letterboxed; a
-// window can be resized. `bpp` is ignored (it chose PTK's 16- or 32-bit mode). `renderDriver`
-// is an SDL_HINT_RENDER_DRIVER value ("direct3d11", "opengl", ...) or NULL to let SDL choose;
+// window can be resized. `renderDriver` is an SDL_HINT_RENDER_DRIVER value ("direct3d11", "opengl", ...) or NULL to let SDL choose;
 // only that driver is tried. Returns false if the window or its renderer couldn't be created.
-bool SysCreateWindow(int w, int h, int bpp, bool windowed, const char *title, const char *renderDriver);
+bool SysCreateWindow(int w, int h, bool windowed, const char *title, const char *renderDriver);
 const char *SysRendererName(void);  // the renderer in use ("direct3d11", ...), "" if none
 void SysDestroyWindow(void);        // safe when there is no window
 bool SysHasWindow(void);
@@ -36,8 +35,16 @@ void SysProcessEvents(void);        // handles pending window events
 // Shows the back buffer, processes events, then waits so that frames are at least 1000/fps
 // whole milliseconds apart (PTK's cap: 16 ms, 62.5 fps, for 60). While the window is in the
 // background it waits for it to come back, as PTK's flipBackBuffer(true) did.
+// With interpolation on, it shows frames at the display's rate until the next frame is due,
+// each between the last two frames' pictures; the game's frame rate stays the same.
 void SysFlip(void);
 void SysSetMaxFps(int fps);         // 0 or less: no cap
+void SysSetVSync(bool on);          // presents wait for the vertical blank (default on)
+// Interpolation modes. Auto interpolates unless vsync is on and the display's refresh rate is
+// the game's frame rate (a 60 Hz display at 60 fps), where it gains nothing.
+enum { SYS_INTERP_AUTO = 0, SYS_INTERP_ON = 1, SYS_INTERP_OFF = 2, SYS_INTERP_COUNT };
+void SysSetInterpolation(int mode); // SYS_INTERP_*; anything else is auto
+bool SysInterpolating(void);        // whether frames are being interpolated now
 void SysSetClearColor(float r, float g, float b, float a);
 // PTK's world transform; only the identity is supported (the game sets nothing else).
 // `clear` clears the back buffer to the clear colour.
@@ -46,6 +53,7 @@ void SysMinimize(void);
 bool SysHasFocus(void);
 void SysSetIcon(const char *icoFile);   // window icon from an .ico file
 void SysDisableScreenSaver(void);
+void SysSetFullscreen(const bool fullscreen);
 // Called with true when the window gains focus, false when it loses it. Replaces the
 // WM_ACTIVATE half of the game's window-message hook (SDL itself keeps the screensaver and
 // the Alt system menu away).
@@ -218,13 +226,12 @@ typedef unsigned long AudioHandle;
 enum AudioAttrib {
     AUDIO_FREQ = 1,                 // playback rate in Hz (a sample's own rate = normal pitch)
     AUDIO_VOL  = 2,                 // 0-1
-    AUDIO_PAN  = 3                  // -1 (left) to 1 (right)
+    AUDIO_PAN  = 3                  // -1 (left) to 1 (right); outside that ignored, as BASS did
 };
 typedef enum AudioAttrib AudioAttrib;
 
 enum {
-    AUDIO_SAMPLE_LOOP     = 1,      // SampleLoad flags
-    AUDIO_SAMPLE_SOFTWARE = 2       // BASS's software mixing; no effect
+    AUDIO_SAMPLE_LOOP     = 1       // SampleLoad flags
 };
 
 bool AudioInit(void);               // the default device, 44100 Hz stereo

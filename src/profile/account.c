@@ -272,7 +272,7 @@ void SaveAccount(int profile)
             r = _write(fh, &g_accBuf[profile], SIZEOF_ACCOUNT);
             if (r == -1) {
                 g_fileWriteErrorFlag = 1;
-                SysMessageBox("WarBlade v1.34, Copyright 1999-2009 Edgar M Vigdal",
+                SysMessageBox("WarBlade v1.34 SR1, Copyright 1999-2009 Edgar M Vigdal",
                               "Could not open/create Profile file");
                 g_fileWriteErrorFlag = 0;
             }
@@ -637,14 +637,14 @@ bool DecodeAccount(void *buf, int profile, int len)
             g_acc.settings.borderMode = g_accV2.settings.borderMode;
             g_acc.settings.unused030 = g_accV2.settings.unused030;
             g_acc.settings.musicFormat = g_accV2.settings.musicFormat;
-            g_acc.settings.soundMode = g_accV2.settings.soundMode;
+            g_acc.settings.unused038 = g_accV2.settings.unused038;
             g_acc.settings.unused03c = g_accV2.settings.unused03c;
             g_acc.settings.musicVolume = g_accV2.settings.musicVolume;
             g_acc.settings.sfxVol = g_accV2.settings.sfxVol;
             g_acc.settings.fps = g_accV2.settings.fps;
             g_acc.settings.numStars = g_accV2.settings.numStars;
             g_acc.settings.unused050 = g_accV2.settings.unused050;
-            g_acc.settings.bpp = g_accV2.settings.bpp;
+            g_acc.settings.unused054 = g_accV2.settings.unused054;
             g_acc.settings.sfxOn = g_accV2.settings.sfxOn;
             g_acc.settings.unused05c = g_accV2.settings.unused05c;
 
@@ -660,7 +660,7 @@ bool DecodeAccount(void *buf, int profile, int len)
             g_acc.settings.difficulty = g_accV2.settings.difficulty;
             g_acc.settings.bgEnabled = g_accV2.settings.bgEnabled;
             g_acc.settings.bgTint = g_accV2.settings.bgTint;
-            g_acc.settings.freq = g_accV2.settings.freq;
+            g_acc.settings.unused104 = g_accV2.settings.unused104;
             g_acc.settings.sparks = g_accV2.settings.sparks;
             g_acc.settings.profileSel = g_accV2.settings.profileSel;
 

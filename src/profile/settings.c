@@ -10,8 +10,6 @@
 enum {
     DEFAULT_SCREEN_W      = 800,
     DEFAULT_SCREEN_H      = 600,
-    BPP_16                = 16,
-    BPP_32                = 32,
     FPS_CLAMP_MIN         = 50,
     FPS_CLAMP_MAX         = 90,
     ALIEN_BUFFER_MIN      = 5,
@@ -281,7 +279,6 @@ void DefaultSettings()
     g_cfg.version = g_version;
     g_presets = 1;
     g_cfg.borderMode = BORDER_ON;
-    g_cfg.bpp = BPP_16;
     g_cfg.sfxVol = 0xcc;
     g_cfg.musicVolume = 0xb3;
     g_cfg.musicVol = 0xff;
@@ -342,7 +339,6 @@ void DefaultSettings()
     DoNothing();
     g_cfg.bgEnabled = 0;
     g_cfg.bgTint = 0x37;
-    g_cfg.freq = 44100;
     g_cfg.sparks = 20.0f;
     g_maxSparks = ((int)g_cfg.sparks >> 1 < MIN_SPARKS) ? MIN_SPARKS : (int)g_cfg.sparks >> 1;
     g_cfg.profileSel = -1;
@@ -363,14 +359,15 @@ void DefaultSettings()
     g_cfg.unusedF14c[4] = 0;
     g_cfg.checkVersion = 1;
     g_cfg.alienBuffer = ALIEN_BUFFER_MIN;
-    g_cfg.soundMode = SOUND_MODE_HARDWARE;
     g_cfg.renderer = RENDERER_AUTO;
+    g_cfg.vsyncOff = 0;
+    g_cfg.interpolation = SYS_INTERP_AUTO;
     g_cfg.windowedByte = 1;
     g_cfg.musicFormat = MUSIC_FMT_MP3;
 }
 
 // Loads g_cfg from WarBlade.inf; resets to defaults if the file is missing, the wrong
-// size, or from an older game version (also re-clamping fps/screen size/bpp/collision
+// size, or from an older game version (also re-clamping fps/screen size/collision
 // detail in that case). Applies the loaded audio/sparks settings afterward.
 void LoadSettings()
 {
@@ -400,13 +397,6 @@ void LoadSettings()
         g_screenW = DEFAULT_SCREEN_W;
         g_screenH = DEFAULT_SCREEN_H;
 
-        // NOTE: `bpp == 16` is tested twice; kept as in the original (harmless, same effect as once).
-        if (g_cfg.bpp == BPP_16 || g_cfg.bpp == BPP_16 || g_cfg.bpp == BPP_32)
-        {
-        }
-        else
-            g_cfg.bpp = BPP_16;
-        g_windowBpp = g_cfg.bpp;
         g_windowed = g_cfg.windowedByte;
 
         if (g_cfg.collisionDetail == COLLISION_SIMPLE || g_cfg.collisionDetail == COLLISION_NORMAL)
@@ -423,12 +413,6 @@ void LoadSettings()
             g_cfg.fps = 0x3c;
         g_screenW = DEFAULT_SCREEN_W;
         g_screenH = DEFAULT_SCREEN_H;
-        if (g_cfg.bpp == BPP_16 || g_cfg.bpp == BPP_16 || g_cfg.bpp == BPP_32)
-        {
-        }
-        else
-            g_cfg.bpp = BPP_16;
-        g_windowBpp = g_cfg.bpp;
         g_windowed = g_cfg.windowedByte;
 
         if (g_cfg.collisionDetail == COLLISION_SIMPLE || g_cfg.collisionDetail == COLLISION_NORMAL)

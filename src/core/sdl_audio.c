@@ -64,7 +64,7 @@ static Music             s_music[MAX_MUSIC];
 static unsigned          s_lastGen;
 static int               s_error;       // BASS-style error code of the last failure
 
-enum { ERR_FILEOPEN = 2, ERR_HANDLE = 5, ERR_START = 9, ERR_NOCHAN = 18, ERR_MEM = 1 };
+enum { ERR_FILEOPEN = 2, ERR_HANDLE = 5, ERR_START = 9, ERR_NOCHAN = 18, ERR_MEM = 1, ERR_ILLPARAM = 20 };
 
 // Handles: type (2 bits) | generation (10) | object index (12) | voice index (8).
 enum { H_SAMPLE = 1, H_VOICE = 2, H_MUSIC = 3 };
@@ -462,11 +462,25 @@ void ChanStop(AudioHandle ch)
     }
 }
 
+// BASS rejects a pan outside -1..1 (BASS_ERROR_ILLPARAM) and keeps the old one. The game relies
+// on it: its sound effects pass g_panTable's 0..255 screen-x values, so they play centred (only
+// the leftmost few pixels' values are in range, and pan slightly right). Clamping them instead
+// put nearly every effect in the right ear.
+static bool PanValid(float pan)
+{
+    if (pan >= -1.0f && pan <= 1.0f)
+        return true;
+    s_error = ERR_ILLPARAM;
+    return false;
+}
+
 // Sample handles are ignored, as BASS did.
 void ChanSet(AudioHandle ch, enum AudioAttrib attrib, float value)
 {
     Chan *c = ChanFromHandle(ch);
     if (c == NULL)
+        return;
+    if (attrib == AUDIO_PAN && !PanValid(value))
         return;
     switch (attrib) {
     case AUDIO_VOL:
@@ -496,6 +510,8 @@ void ChanSlide(AudioHandle ch, enum AudioAttrib attrib, float value, int ms)
 {
     Chan *c = ChanFromHandle(ch);
     if (c == NULL)
+        return;
+    if (attrib == AUDIO_PAN && !PanValid(value))
         return;
     if (ms <= 0) {
         ChanSet(ch, attrib, value);

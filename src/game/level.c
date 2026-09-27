@@ -1051,7 +1051,7 @@ int PackLevelData(int slot, int level, short mode)
 void LoadingScreen(int n)
 {
     DrawRect(0, 0, (float)g_screenW, (float)g_screenH, 0, 0, 0, 1.0f);
-    DrawMenuText("WARBLADE VERSION 1.34", POS_CENTERED, 0x10e, 2);
+    DrawMenuText("WARBLADE VERSION 1.34 SR1", POS_CENTERED, 0x10e, 2);
     DrawMenuText("L O A D I N G   D A T A", POS_CENTERED, 0x136, 2);
     sprintf(g_logBuf, "FILLING LEVEL BUFFER : %d", n);
     DrawMenuText(g_logBuf, POS_CENTERED, 0x168, 2);
@@ -1070,36 +1070,30 @@ void LoadingScreen(int n)
 }
 
 // Packs and preloads every classic, time-trial and malfunction level into the sound-slot
-// buffer (up to 200 slots), showing the loading screen after each one. Called once at startup.
+// buffer (up to 200 slots). The loading screen is redrawn at most every 16 ms (a frame at the
+// 60 fps cap) and once at the end, so the frame cap doesn't hold up each level. Called once at
+// startup. Stops early if the window is closed.
 void BufferAllLevels()
 {
     int slot = 0;
     int total = 0;
+    unsigned lastDraw = SysMillis();
+    int pass;
+    int n;
     g_alienGfxBufferedCount = 0;
     g_lastLevelBuffered = 0;
-    for (int i = 0; i < 100; i++) {
-        if (slot < MAX_ALIEN_GFX_SLOTS) {
-            total = PackLevelData(slot, i + 1, 0) + total;
+    for (pass = 0; pass < 3; pass++) {
+        int count = pass == 0 ? 100 : pass == 1 ? g_numLevels2 : g_numMalfunction;
+        for (n = 0; n < count && slot < MAX_ALIEN_GFX_SLOTS && !SysQuitRequested(); n++) {
+            total = PackLevelData(slot, n + 1, pass) + total;
             slot++;
-            LoadingScreen(slot);
+            if (SysMillis() - lastDraw >= 16) {
+                LoadingScreen(slot);
+                lastDraw = SysMillis();
+            }
         }
     }
-
-    for (int j = 0; j < g_numLevels2; j++) {
-        if (slot < MAX_ALIEN_GFX_SLOTS) {
-            total = PackLevelData(slot, j + 1, 1) + total;
-            slot++;
-            LoadingScreen(slot);
-        }
-    }
-
-    for (int k = 0; k < g_numMalfunction; k++) {
-        if (slot < MAX_ALIEN_GFX_SLOTS) {
-            total = PackLevelData(slot, k + 1, 2) + total;
-            slot++;
-            LoadingScreen(slot);
-        }
-    }
+    LoadingScreen(slot);
 }
 
 // Frees every packed level's compressed source buffer and every loaded channel's graphics/

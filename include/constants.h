@@ -107,7 +107,7 @@ enum MusicFormat {
     MUSIC_FMT_PLAYLIST = 2      // random line of playlist.m3u
 };
 
-// g_cfg.renderer: the SDL render driver ("RENDER:" on the settings page). The byte was PTK's
+// g_cfg.renderer: the SDL render driver (a button on the settings page). The byte was PTK's
 // DirectX (1) / OpenGL (0) choice, so 0 and 1 both mean auto, and the original exe reads every
 // value but 0 as DirectX. Anything out of range is auto too (RendererChoiceOf).
 enum RendererChoice {
@@ -119,12 +119,6 @@ enum RendererChoice {
     RENDERER_OPENGL    = 5,         // "opengl"
     RENDERER_VULKAN    = 6,         // "vulkan"
     RENDERER_COUNT
-};
-
-// g_cfg.soundMode: sample mixing ("TOGGLE SOUNDMIXER").
-enum SoundMode {
-    SOUND_MODE_HARDWARE = 0x20,
-    SOUND_MODE_SOFTWARE = 0x40  // samples are loaded for software mixing (AUDIO_SAMPLE_SOFTWARE)
 };
 
 // g_cfg.borderMode ("SCROLLING BORDER").
@@ -611,9 +605,7 @@ enum MenuId {
     MENUID_BG_ENABLED_NEXT       = 118,
     MENUID_BG_BRIGHTNESS_PREV    = 119,  // cycles g_cfg.bgTint down the BG_BRIGHTNESS_* ladder
     MENUID_BG_BRIGHTNESS_NEXT    = 120,
-    // 121-124: reserved (g_nextId += 4; skipped, never assigned to a button)
-    MENUID_BPP_PREV              = 125,  // g_cfg.bpp 16/32 toggle; both arrows do the same thing
-    MENUID_BPP_NEXT              = 126,
+    // 121-126: unused (121-124 were skipped in the original; 125-126 were the colour-depth arrows)
     MENUID_NUM_STARS_DOWN        = 127,
     MENUID_NUM_STARS_UP          = 128,
     MENUID_COLLISION_DETAIL_PREV = 129,  // COLLISION_SIMPLE/NORMAL toggle; both arrows do the same
@@ -634,7 +626,9 @@ enum MenuId {
     MENUID_TOGGLE_PROFILE_LIST    = 174,  // "A": same list window as MENUID_USER_PROFILES
     MENUID_TOGGLE_INPUT_SWAP      = 175,  // SwapKeyBindings()
     MENUID_TOGGLE_WINDOWED        = 176,
-    MENUID_RELOAD_SOUND           = 177,  // reinit BASS and reload sfx/music
+    // 177 was "TOGGLE SOUND MIXER" (BASS hardware/software mixing), gone with the SDL port
+    MENUID_TOGGLE_VSYNC           = 710,  // g_cfg.vsyncOff (SDL port)
+    MENUID_TOGGLE_INTERPOLATION   = 711,  // cycles g_cfg.interpolation (SDL port)
     MENUID_MUSICVOL_MUTE          = 700,  // second volume slider: g_cfg.musicVol / SetMusicVolTable()
     MENUID_MUSICVOL_DOWN          = 701,
     MENUID_MUSICVOL_UP            = 702,

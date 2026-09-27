@@ -498,7 +498,9 @@ float Sin(float a);
 bool ResetClip();
 bool InitWindow(bool windowed);
 int RendererChoiceOf(int value);
-const char *RendererLabel(int choice);
+void ApplyFrameSettings(void);
+const char *CycleInterpolation(void);
+const char *ToggleVSync(void);
 int InitWindowCfg();
 
 // (0x5a1d50)
