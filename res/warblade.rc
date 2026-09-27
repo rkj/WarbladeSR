@@ -1,0 +1,3 @@
+// The original's icon (resource 103, copied from the install by build.bat) and manifest.
+103 ICON "warblade.ico"
+1 24 "warblade.manifest"

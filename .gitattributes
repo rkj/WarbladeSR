@@ -1,0 +1,2 @@
+# store files byte-for-byte (no CRLF conversion)
+* -text
