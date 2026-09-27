@@ -16,7 +16,7 @@
 // g_state (and g_savedState): the top-level state GameFrame() dispatches on.
 enum GameState {
     STATE_PAUSED            = 0,    // paused: quit/profile windows open, timers frozen
-    STATE_UNUSED_1          = 1,    // never set; only compared (render.cpp border width)
+    STATE_UNUSED_1          = 1,    // never set; only compared (render.c border width)
     STATE_PLAYING           = 2,    // normal gameplay
     STATE_TITLE             = 5,    // title / main menu
     STATE_HISCORE_TABLE     = 6,    // hiscore/tally table after a run
@@ -107,10 +107,24 @@ enum MusicFormat {
     MUSIC_FMT_PLAYLIST = 2      // random line of playlist.m3u
 };
 
+// g_cfg.renderer: the SDL render driver ("RENDER:" on the settings page). The byte was PTK's
+// DirectX (1) / OpenGL (0) choice, so 0 and 1 both mean auto, and the original exe reads every
+// value but 0 as DirectX. Anything out of range is auto too (RendererChoiceOf).
+enum RendererChoice {
+    RENDERER_AUTO_OLD_OPENGL = 0,   // an original WarBlade.inf that chose OpenGL
+    RENDERER_AUTO      = 1,         // SDL picks (no SDL_HINT_RENDER_DRIVER)
+    RENDERER_DIRECTX9  = 2,         // "direct3d"
+    RENDERER_DIRECTX11 = 3,         // "direct3d11"
+    RENDERER_DIRECTX12 = 4,         // "direct3d12"
+    RENDERER_OPENGL    = 5,         // "opengl"
+    RENDERER_VULKAN    = 6,         // "vulkan"
+    RENDERER_COUNT
+};
+
 // g_cfg.soundMode: sample mixing ("TOGGLE SOUNDMIXER").
 enum SoundMode {
     SOUND_MODE_HARDWARE = 0x20,
-    SOUND_MODE_SOFTWARE = 0x40  // samples are loaded with BASS_SAMPLE_SOFTWARE
+    SOUND_MODE_SOFTWARE = 0x40  // samples are loaded for software mixing (AUDIO_SAMPLE_SOFTWARE)
 };
 
 // g_cfg.borderMode ("SCROLLING BORDER").
@@ -342,13 +356,13 @@ enum CardType {
     CARD_LOSE_TIME          = 1,
     CARD_SCORE_X2           = 2,
     CARD_SCORE_X5           = 3,
-    CARD_SCORE_100          = 4,  // score (times the multiplier): g_enemyScoreTable[19]
-    CARD_SCORE_1000         = 5,  // g_enemyScoreTable[18]
-    CARD_SCORE_10000        = 6,  // g_enemyScoreTable[15]
+    CARD_SCORE_100          = 4,  // score 100 (times the multiplier)
+    CARD_SCORE_1000         = 5,  // score 1000
+    CARD_SCORE_10000        = 6,  // score 10000
     CARD_MONEY_DOUBLER      = 7,
-    CARD_MONEY_50           = 8,  // money: g_enemyScoreTable[24]
-    CARD_MONEY_100          = 9,  // g_enemyScoreTable[25]
-    CARD_MONEY_200          = 10, // g_enemyScoreTable[26]
+    CARD_MONEY_50           = 8,  // money 50
+    CARD_MONEY_100          = 9,  // money 100
+    CARD_MONEY_200          = 10, // money 200
     CARD_EXTRA_TIME         = 11,
     CARD_EXTRA_LIFE         = 12,
     CARD_MARK_6             = 13, // LETTER(MARK_6) ... CARD_MARK_1 = LETTER(MARK_1)
@@ -535,56 +549,12 @@ enum {
     SFX_PAN_CENTER          = 127
 };
 
-// Indices into g_enemyScoreTable[], which (despite its name) is a table of obfuscated
-// constants: g_enemyScoreTable[i] == OBFUSCATE_VALUE(value). The game reads prices, bonuses
-// and caps from it instead of writing the numbers, so a memory editor can't find them.
-// Each index is named by the value it holds; _B marks a second slot with the same value.
-enum ObfValueIndex {
-    OBF_1           = 0,    // both 0 and 1 are g_valueObfuscationMult, i.e. OBFUSCATE_VALUE(1)
-    OBF_1_B         = 1,
-    OBF_3           = 2,
-    OBF_0           = 3,
-    OBF_8           = 4,
-    OBF_14          = 5,
-    OBF_3_B         = 6,
-    OBF_0_B         = 7,
-    OBF_0_C         = 8,
-    OBF_25000       = 9,
-    OBF_0_D         = 10,
-    OBF_10000000    = 11,
-    OBF_100000      = 12,
-    OBF_1000000     = 13,
-    OBF_500000      = 14,
-    OBF_10000       = 15,
-    OBF_25000_B     = 16,
-    OBF_50000       = 17,
-    OBF_1000        = 18,
-    OBF_100         = 19,
-    OBF_5000        = 20,
-    OBF_2500        = 21,
-    OBF_10          = 22,
-    OBF_99990       = 23,
-    OBF_50          = 24,
-    OBF_100_B       = 25,
-    OBF_200         = 26,
-    OBF_500         = 27,
-    OBF_250         = 28,
-    OBF_5000000     = 29,
-    OBF_999990      = 30,
-    OBF_2000        = 31,
-    OBF_450000      = 32,
-    OBF_250000000   = 33,
-    OBF_2000000     = 34,
-    OBF_20000000    = 35,
-    OBF_2500000     = 36
-};
-
 // Money the player needs for the shop to open / stay open (compared with the float money).
 #define SHOP_MIN_MONEY 50.0
 
 
 // ============================================================================
-// Menu ids (built and handled in menu.cpp; title.cpp builds the startup version-check popup)
+// Menu ids (built and handled in menu.c)
 // ============================================================================
 
 // Ids for g_clicked (a main-menu / options-page entry built by AddMenuText/AddMenuItem) and
@@ -659,9 +629,7 @@ enum MenuId {
     MENUID_VOICE_PACK_NEXT        = 150,  // "NEXT VOICE PACK"; 151 is an unused twin, never wired up
     MENUID_SPARKS_DOWN            = 152,  // "E" + shift decreases g_cfg.sparks
     MENUID_SPARKS_UP              = 153,  // "E" increases g_cfg.sparks
-    MENUID_CHECK_ONLINE           = 170,  // F10: opens the "check for new version" confirm
-    MENUID_NEWS_FEED_TOGGLE       = 171,  // F11: opens the news-feed on/off confirm
-    MENUID_TOGGLE_RENDERER        = 172,  // DirectX/OpenGL
+    MENUID_TOGGLE_RENDERER        = 172,  // cycles g_cfg.renderer
     MENUID_TOGGLE_SHUFFLE         = 173,  // playlist random/sequential
     MENUID_TOGGLE_PROFILE_LIST    = 174,  // "A": same list window as MENUID_USER_PROFILES
     MENUID_TOGGLE_INPUT_SWAP      = 175,  // SwapKeyBindings()
@@ -673,7 +641,7 @@ enum MenuId {
     MENUID_MUSICVOL_MAX           = 703,
     MENUID_ALIEN_BUFFER_DOWN      = 0x409,
     MENUID_ALIEN_BUFFER_UP        = 0x40a,
-    MENUID_SUBMIT_HISCORE_ONLINE  = 555,
+    MENUID_ONLINE_HALL_OF_FAME    = 555,    // hiscore screen: opens the archived online hall of fame
 
     // -- g_clickItem: window-close and generic dialog sentinels --
     MENUID_CLOSE             = 0xff,   // generic close/cancel/no; used by almost every popup
@@ -712,24 +680,10 @@ enum MenuId {
     MENUID_QUIT_TO_WINDOWS_NO     = 0xcc,   // 204
     MENUID_JUKEBOX_LAUNCH_CONFIRM = 0x108,
 
-    // -- g_clickItem: online registration / version check / news feed / serial code --
-    MENUID_REGISTER_DOWNLOAD      = 7998,   // "YES! DOWNLOAD" the registration client
-    MENUID_OPEN_REGISTER_PAGE     = 10002,
+    // -- g_clickItem: generic dialog buttons --
     MENUID_DIALOG_DISMISS_A       = 10003,  // plain close, no side effect
     MENUID_DIALOG_DISMISS_B       = 4999,   // plain close, no side effect (different dialog)
-    MENUID_VERSION_CHECK_YES      = 7981,   // F10 dialog: "YES! CHECK FOR NEW VERSION"
-    MENUID_VERSION_CHECK_NO       = 7980,   // F10 dialog "NO!"; also OpenCreateProfileWin()'s "NO"
-    MENUID_VERSION_CHECK_TOGGLE   = 7996,   // "CHECK EVERYTIME ON STARTUP!" / "DO NOT CHECK AGAIN!"
-    MENUID_VERSION_CHECK_DISMISS  = 7995,   // "OK"/"NO!" once a version-check result is shown
-    MENUID_STARTUP_CHECK_EVERY_TIME  = 7997,   // built in title.cpp's startup nag, handled here
-    MENUID_STARTUP_DONT_CHECK_AGAIN  = 79971,  // built in title.cpp's startup nag, handled here
-    MENUID_NEWS_FEED_ON           = 79998,
-    MENUID_NEWS_FEED_DECLINE      = 79999,  // generic "OK"/"CANCEL"/"NO" on most later popups too
-                                             // (see report: only the first g_clickItem==79999
-                                             // check in file order is ever reachable)
-    MENUID_VALIDATE_SERIAL        = 8800,
-    MENUID_SERIAL_TRY_AGAIN       = 0x2261,
-    MENUID_ONLINE_HOF_LINK        = 0x2262,
+    MENUID_DIALOG_NO              = 7980,   // OpenCreateProfileWin()'s "NO"
 
     // -- g_clickItem: profile list / login windows (also PROFILE_USE_ID_BASE/VIEW_ID_BASE + slot) --
     MENUID_PROFILE_NEW            = 100,    // "NEW" in the USER PROFILES list window

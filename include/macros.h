@@ -2,7 +2,7 @@
 // Statement macros shared by several modules. The original evidently had macros like these:
 // the same statement sequences recur verbatim across files. Each one expands to exactly the
 // statements that were written out at its call sites, so using it doesn't change the code.
-// Macros used by a single module stay local to that module's .cpp file.
+// Macros used by a single module stay local to that module's .c file.
 //
 // Included from game.h; the names they use (globals, functions) are resolved where they expand.
 
@@ -19,38 +19,10 @@
 
 
 // ---------------------------------------------------------------------------------------
-// Score with overflow guard
+// Score
 // ---------------------------------------------------------------------------------------
-// After every score change the game clamps the score, and if ClampScore() flagged it as
-// corrupt (-1) it logs the details and then divides by zero on purpose (g_errDiv / g_errDiv)
-// so the crash handler reports it. `logAdd` / `logPos` only go into the log line; `errPos`
-// is stored in g_errPos (usually the same number as logPos).
-#define SCORE_OVERFLOW_CHECK(score, pl, logAdd, logPos, errPos)                              \
-    if ((score) == -1) {                                                                     \
-        sprintf(g_logBuf, "SCORE ERROR S:%d P:%d M:%d B:%d POS:%d\r\n", g_scoreBefore, pl,   \
-                g_scoreMul[pl], logAdd, logPos);                                             \
-        LogPrint(g_logBuf);                                                                  \
-        g_errPos = errPos;                                                                   \
-        if (g_errPos != 0) {                                                                 \
-            g_errDiv = 0;                                                                    \
-            g_errDiv = g_errDiv / g_errDiv;                                                  \
-        }                                                                                    \
-    }
-
-// Adds `add` times player `pl`'s score multiplier to `score` (an lvalue), clamps it and runs
-// the overflow check. The original's copies spell the addition two ways, which /Od compiles
-// differently, so there are two versions: `score += ...` and `score = score + ...`.
-#define ADD_SCORE_CHECKED(score, pl, add, pos)       \
-    g_scoreBefore = (score);                         \
-    (score) += (add) * g_scoreMul[pl];               \
-    (score) = ClampScore(score);                     \
-    SCORE_OVERFLOW_CHECK(score, pl, add, pos, pos)
-
-#define ADD_SCORE_CHECKED_SUM(score, pl, add, pos)   \
-    g_scoreBefore = (score);                         \
-    (score) = (score) + (add) * g_scoreMul[pl];      \
-    (score) = ClampScore(score);                     \
-    SCORE_OVERFLOW_CHECK(score, pl, add, pos, pos)
+// Adds `add` times player `pl`'s score multiplier to `score` (an lvalue).
+#define ADD_PLAYER_SCORE(score, pl, add) ((score) += (__int64)(add) * g_scoreMul[pl])
 
 
 // ---------------------------------------------------------------------------------------

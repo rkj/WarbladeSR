@@ -6,13 +6,88 @@
 // `char pad_<off>[<size>]; // +0x<off>`, with <off> the hex offset. Some are alignment
 // holes the compiler would add anyway; the rest are members the code never touches
 // (or, in the save-file structs, reserved space). They keep offsets and file layouts fixed.
-#include <windows.h>
-#include <ddraw.h>
-#include "ptk.h"
+#include "sdlhelp.h"
 #pragma warning(disable: 4201)   // anonymous structs in unions
 
-typedef unsigned long BASS_DWORD;          // bass.h: DWORD
+// A check that holds only where pointers are 32-bit (the original's layout of a struct that
+// holds a pointer).
+#define C_ASSERT_32(e) C_ASSERT(sizeof(void *) != 4 || (e))
+
 typedef void (*VoidFn)();
+
+// C needs the struct tag; these let the game name the types without it.
+typedef struct Name255 Name255;
+typedef struct Settings Settings;
+typedef struct Account Account;
+typedef struct AccountV0 AccountV0;
+typedef struct SettingsV2 SettingsV2;
+typedef struct AccountV2 AccountV2;
+typedef struct Beam Beam;
+typedef struct Rect16 Rect16;
+typedef struct BlitItem BlitItem;
+typedef struct Bonus Bonus;
+typedef struct BonusStats BonusStats;
+typedef struct FallingHazard FallingHazard;
+typedef struct Box Box;
+typedef struct Card Card;
+typedef struct FadeColors FadeColors;
+typedef struct EndRect EndRect;
+typedef struct FrameSet FrameSet;
+typedef struct Enemy Enemy;
+typedef struct Explosion Explosion;
+typedef struct FPair FPair;
+typedef struct Flash Flash;
+typedef struct Flash34 Flash34;
+typedef struct PatternPt PatternPt;
+typedef struct Pattern Pattern;
+typedef struct HiscoreEntry HiscoreEntry;
+typedef struct HiscoreData HiscoreData;
+typedef struct IntPair IntPair;
+typedef struct LvSub LvSub;
+typedef struct LvGrp LvGrp;
+typedef struct LvHdr LvHdr;
+typedef struct LvObj LvObj;
+typedef struct Level Level;
+typedef struct LevelObj LevelObj;
+typedef struct LvRawSub LvRawSub;
+typedef struct LvRawGrp LvRawGrp;
+typedef struct LvRawHdr LvRawHdr;
+typedef struct LvRawObj LvRawObj;
+typedef struct LvRawQ LvRawQ;
+typedef struct LevelRaw LevelRaw;
+typedef struct LevelRec LevelRec;
+typedef struct LinkArea LinkArea;
+typedef struct MapObj MapObj;
+typedef struct MenuEntry MenuEntry;
+typedef struct ScorePopup ScorePopup;
+typedef struct EnemySet EnemySet;
+typedef struct Particle Particle;
+typedef struct FreeParticle FreeParticle;
+typedef struct Player Player;
+typedef struct QuadItem QuadItem;
+typedef struct Ring Ring;
+typedef struct SaveData SaveData;
+typedef struct ShipDef ShipDef;
+typedef struct BurstSpark BurstSpark;
+typedef struct PulseFx PulseFx;
+typedef struct AlienGfxSlot AlienGfxSlot;
+typedef struct SoundQueueEntry SoundQueueEntry;
+typedef struct Spark Spark;
+typedef struct FallingSprite FallingSprite;
+typedef struct ScoopTrail ScoopTrail;
+typedef struct HyperspaceStar HyperspaceStar;
+typedef struct StretchItemF StretchItemF;
+typedef struct StretchItemI StretchItemI;
+typedef struct StretchItemRot StretchItemRot;
+typedef struct QuadImageItem QuadImageItem;
+typedef struct ButtonItem ButtonItem;
+typedef struct ImageRectItem ImageRectItem;
+typedef struct LinkItem LinkItem;
+typedef struct TextItem TextItem;
+typedef struct MenuItem MenuItem;
+typedef struct ToggleItem ToggleItem;
+typedef struct EditItem EditItem;
+typedef struct Window Window;
 
 struct Name255 {   // 0xff bytes; at 0xa914e1[20], 0xafc221[20]
     char s[255]; // +0x0
@@ -47,7 +122,7 @@ struct Settings {   // 0x638 bytes; at 0xa928d0[1], 0xd2eb30[1], 0xaf7848
     char pad_6d[0x3]; // +0x6d
     union {
         __int64 best; // +0x70
-        LARGE_INTEGER playTime; // +0x70
+        __int64 playTime; // +0x70
     };
     union {
         struct {
@@ -102,17 +177,14 @@ struct Settings {   // 0x638 bytes; at 0xa928d0[1], 0xd2eb30[1], 0xaf7848
     int musicVol; // +0x144
     int version; // +0x148
     float unusedF14c[5]; // +0x14c
-    int newsIds[4]; // +0x160
-    int newsCounts[4]; // +0x170
+    int newsIds[4]; // +0x160 (unused: the online code is gone)
+    int newsCounts[4]; // +0x170 (unused: the online code is gone)
     int alienBuffer; // +0x180
-    char serialCode[0x32]; // +0x184
+    char serialCode[0x32]; // +0x184 (unused: the online code is gone)
     char unusedStr1b6[63]; // +0x1b6
     char unusedStr1f5[4][255]; // +0x1f5
-    unsigned char checkVersion; // +0x5f1
-    union {
-        unsigned char directXByte; // +0x5f2
-        bool useDirectX; // +0x5f2
-    };
+    unsigned char checkVersion; // +0x5f1 (unused: the online code is gone)
+    unsigned char renderer; // +0x5f2 RendererChoice (PTK's DirectX/OpenGL byte: 1 DirectX, 0 OpenGL)
     union {
         unsigned char shuffleByte; // +0x5f3
         bool shuffle; // +0x5f3
@@ -122,7 +194,7 @@ struct Settings {   // 0x638 bytes; at 0xa928d0[1], 0xd2eb30[1], 0xaf7848
         bool windowed; // +0x5f4
     };
     char pad_5f5[0x1]; // +0x5f5
-    short netMode; // +0x5f6
+    short netMode; // +0x5f6 (unused: the online code is gone)
     union {
         struct {
             int pause[4]; // +0x5f8
@@ -153,7 +225,7 @@ struct Account {   // 0x40d0 bytes; at 0xa913c0, 0xd2d620
     char name[30]; // +0x7
     char password[16]; // +0x25
     char pad_35[0x1]; // +0x35
-    SYSTEMTIME created; // +0x36
+    SysDate created; // +0x36
     char pad_46[0x2]; // +0x46
     __int64 bestLevelTime; // +0x48
     __int64 bestMeteorstormTime; // +0x50
@@ -198,7 +270,7 @@ struct Account {   // 0x40d0 bytes; at 0xa913c0, 0xd2d620
             __int64 playTimeRaw; // +0x88
         };
         struct {
-            LARGE_INTEGER playTime; // +0x88
+            __int64 playTime; // +0x88
         };
     };
     union {
@@ -329,7 +401,7 @@ struct SettingsV2 {   // 0x630 bytes; at 0xafd610[1]; the old (0x3c00-byte file)
     int version;
     char pad_14c[0x49f]; // +0x14c
     unsigned char checkVersion;
-    unsigned char directXByte;
+    unsigned char renderer;
     unsigned char shuffleByte;
     unsigned char windowedByte;
     char pad_5ef[0x21]; // +0x5ef
@@ -348,7 +420,7 @@ struct AccountV2 {   // 0x3c00 bytes; at 0xafc100
     char name[30]; // +0x7
     char password[16]; // +0x25
     char pad_35[0x1]; // +0x35
-    SYSTEMTIME created; // +0x36
+    SysDate created; // +0x36
     char pad_46[0x2]; // +0x46
     __int64 bestLevelTime; // +0x48
     __int64 bestMeteorstormTime; // +0x50
@@ -435,7 +507,7 @@ struct BlitItem {   // 0x20 bytes; at 0xf61a68, 0xf4e808
     Rect16 src; // +0x0
     float destX; // +0x10
     float destY; // +0x14
-    KGraphic *graphic; // +0x18
+    Image *graphic; // +0x18
     char pad_1c[0x4]; // +0x1c
 };
 
@@ -451,8 +523,8 @@ struct Bonus {   // 0x64 bytes; at 0xb04a50[150]
     float frameDelay; // +0x20
     float frameTimer; // +0x24
     int type; // +0x28
-    KGraphic *gfx; // +0x2c
-    int hma; // +0x30
+    Image *gfx; // +0x2c
+    void *hma; // +0x30
     int hmaW; // +0x34
     int hmaH; // +0x38
     union {
@@ -511,7 +583,7 @@ struct FallingHazard {   // 0x58 bytes; at 0xb49d48[30]
     int type; // +0x20
     int vol; // +0x24
     void *graphic; // +0x28
-    int hma; // +0x2c
+    void *hma; // +0x2c
     int hmaW; // +0x30
     int hmaH; // +0x34
     union {
@@ -550,17 +622,6 @@ struct Card {   // 0x18 bytes; at 0x846d80
 struct FadeColors {   // 0x78 bytes; at 0x8ff638, 0xcdb160, 0xe0c0d8
     float step0; // +0x0
     char pad_4[0x74]; // +0x4
-};
-
-struct DDSurface {   // 0x4 bytes: IDirectDrawSurface, the vtable slots the game calls
-    virtual long __stdcall QueryInterface(void *riid, void **obj) = 0;
-    virtual unsigned long __stdcall AddRef() = 0;
-    virtual unsigned long __stdcall Release() = 0;
-    virtual long __stdcall AddAttachedSurface(DDSurface *s) = 0;
-    virtual long __stdcall AddOverlayDirtyRect(Rect16 *r) = 0;
-    virtual long __stdcall Blt(Rect16 *d, DDSurface *s, Rect16 *r, unsigned long f, void *fx) = 0;
-    virtual long __stdcall BltBatch(void *b, unsigned long n, unsigned long f) = 0;
-    virtual long __stdcall BltFast(unsigned long x, unsigned long y, DDSurface *src, Rect16 *rect, unsigned long flags) = 0;
 };
 
 struct EndRect {   // 0x10 bytes
@@ -654,10 +715,10 @@ struct Enemy {   // 0x3a8 bytes; at 0x849a48[600]
     int useDirRemap; // +0x108
     int altFrameCounter; // +0x10c
     char pad_110[0x24]; // +0x110
-    KGraphic *gfxA; // +0x134
-    KGraphic *gfxB; // +0x138
-    KGraphic *hitFlashGfxA; // +0x13c
-    KGraphic *hitFlashGfxB; // +0x140
+    Image *gfxA; // +0x134
+    Image *gfxB; // +0x138
+    Image *hitFlashGfxA; // +0x13c
+    Image *hitFlashGfxB; // +0x140
     void *shotFrame; // +0x144
     int shotGfxW; // +0x148
     int shotGfxH; // +0x14c
@@ -751,7 +812,7 @@ struct Flash {   // 0x28 bytes; at 0x803640[10]
     int x; // +0x4
     int y; // +0x8
     int size; // +0xc
-    KGraphic *graphic; // +0x10
+    Image *graphic; // +0x10
     int r; // +0x14
     int g; // +0x18
     int b; // +0x1c
@@ -816,7 +877,7 @@ struct HiscoreEntry {   // 0x68 bytes; at 0xc39388[100], 0xb4d890[20], 0xb4afe8[
             unsigned short second; // +0x48
             unsigned short milliseconds; // +0x4a
         };
-        SYSTEMTIME date; // +0x3c
+        SysDate date; // +0x3c
     };
     char pad_4c[0x4]; // +0x4c
     __int64 duration; // +0x50
@@ -846,8 +907,8 @@ struct HiscoreData {   // 0x30d4 bytes; at 0xc39380, 0xb4afe0
 #pragma pack(pop)
 
 struct IntPair {   // 0x8 bytes; at 0xe1108c[6]
-    KGraphic *gfx1; // +0x0
-    KGraphic *gfx2; // +0x4
+    Image *gfx1; // +0x0
+    Image *gfx2; // +0x4
 };
 
 struct LvSub {   // 0x20 bytes; at 0xa95cb0[50]
@@ -907,9 +968,9 @@ struct Level {   // 0x1cb98 bytes; at 0xa95c20
 };
 
 struct LevelObj {   // 0x8c bytes; at 0xaf7e80[100]
-    KGraphic *gfxA; // +0x0
-    KGraphic *gfxB; // +0x4
-    int hma; // +0x8
+    Image *gfxA; // +0x0
+    Image *gfxB; // +0x4
+    void *hma; // +0x8
     int hmaW; // +0xc
     int hmaH; // +0x10
     Rect16 rect; // +0x14
@@ -1038,8 +1099,8 @@ struct LinkArea {   // 0x14 bytes; at 0x7f1048
 };
 
 struct MapObj {   // 0xa0 bytes; at 0xd5e338[100]
-    int gfx; // +0x0
-    int drawnA; // +0x4
+    Image *gfx; // +0x0
+    void *drawnA; // +0x4
     int drawnB; // +0x8
     int drawnC; // +0xc
     Rect16 srcRect; // +0x10
@@ -1100,7 +1161,7 @@ struct ScorePopup {   // 0x48 bytes; at 0xe0c240
     int active; // +0x0
     float life; // +0x4
     __int64 value; // +0x8
-    KGraphic *glyphGfx; // +0x10
+    Image *glyphGfx; // +0x10
     float x; // +0x14
     float y; // +0x18
     float vy; // +0x1c
@@ -1162,7 +1223,7 @@ struct FreeParticle {   // 0x68 bytes; at 0xb30690
     int spawn; // +0x4c
     int dir; // +0x50
     int mode; // +0x54
-    KGraphic *graphic; // +0x58
+    Image *graphic; // +0x58
     int *xref; // +0x5c
     int *kill; // +0x60
     unsigned char flag; // +0x64
@@ -1179,8 +1240,8 @@ struct Player {   // 0x4d8 bytes; at 0x8486e8[4]
     float bank; // +0x18
     float writeOnlyF1c; // +0x1c
     char pad_20[0x20]; // +0x20
-    KGraphic *gfx; // +0x40
-    int hitMask; // +0x44
+    Image *gfx; // +0x40
+    void *hitMask; // +0x44
     int hitMaskParamA; // +0x48
     int hitMaskParamB; // +0x4c
     Rect16 box; // +0x50
@@ -1433,7 +1494,7 @@ struct QuadItem {   // 0x2c bytes; at 0xf7a2c8
     float sy; // +0x14
     float sw; // +0x18
     float sh; // +0x1c
-    KGraphic *graphic; // +0x20
+    Image *graphic; // +0x20
     char pad_24[0x8]; // +0x24
 };
 
@@ -1449,7 +1510,7 @@ struct Ring {   // 0x30 bytes; at 0x8ff578[4]
     int b; // +0x20
     float alpha; // +0x24
     int unused28; // +0x28
-    KGraphic *gfx; // +0x2c
+    Image *gfx; // +0x2c
 };
 
 struct SaveData {   // 0x1370 bytes; at 0x8486d8
@@ -1493,7 +1554,7 @@ struct PulseFx {   // 0x34 bytes; at 0xcde8c0
     float speed; // +0xc
     float unusedTimer10; // +0x10
     char pad_14[0x8]; // +0x14
-    KGraphic *gfx; // +0x1c
+    Image *gfx; // +0x1c
     float x; // +0x20
     float y; // +0x24
     union {
@@ -1531,8 +1592,8 @@ struct AlienGfxSlot {   // 0x54c bytes; at 0x803c98[200]
     unsigned char loaded[6]; // +0x10
     char pad_16[0x2]; // +0x16
     int count[6]; // +0x18
-    KGraphic *gfx[6]; // +0x30
-    KGraphic *gfx2[6]; // +0x48
+    Image *gfx[6]; // +0x30
+    Image *gfx2[6]; // +0x48
     void *hma[6]; // +0x60
     char name1[6][51]; // +0x78
     char name2[6][51]; // +0x1aa
@@ -1548,7 +1609,7 @@ struct AlienGfxSlot {   // 0x54c bytes; at 0x803c98[200]
 };
 
 struct SoundQueueEntry {   // 0x10 bytes; at 0xab27d8[10]
-    BASS_DWORD sample; // +0x0
+    AudioHandle sample; // +0x0
     int length; // +0x4
     unsigned int time; // +0x8
     int vol; // +0xc
@@ -1586,7 +1647,7 @@ struct FallingSprite {   // 0x54 bytes; at 0x847398
     float animDelay; // +0x18
     float animTimer; // +0x1c
     char pad_20[0x8]; // +0x20
-    int hma; // +0x28
+    void *hma; // +0x28
     int hmaW; // +0x2c
     int hmaH; // +0x30
     union {
@@ -1624,7 +1685,7 @@ struct HyperspaceStar {   // 0x18 bytes; at 0x7f12a0[3000]
 };
 
 struct StretchItemF {   // 0x1c bytes; at 0xf7b6a0
-    KGraphic *graphic; // +0x0
+    Image *graphic; // +0x0
     float x1; // +0x4
     float y1; // +0x8
     float x2; // +0xc
@@ -1638,7 +1699,7 @@ struct StretchItemF {   // 0x1c bytes; at 0xf7b6a0
 };
 
 struct StretchItemI {   // 0x18 bytes; at 0xf79280
-    KGraphic *graphic; // +0x0
+    Image *graphic; // +0x0
     int x1; // +0x4
     int y1; // +0x8
     int x2; // +0xc
@@ -1650,7 +1711,7 @@ struct StretchItemI {   // 0x18 bytes; at 0xf79280
 };
 
 struct StretchItemRot {   // 0x20 bytes; at 0xf71580, 0xf7b420
-    KGraphic *graphic; // +0x0
+    Image *graphic; // +0x0
     float x1; // +0x4
     float y1; // +0x8
     float x2; // +0xc
@@ -1810,33 +1871,33 @@ struct Window {   // 0xdbc0 bytes; at 0xd62510[10]
     char pad_dbbd[0x3]; // +0xdbbd
 };
 
-// Sizes, as laid out by the compiler.
+// Sizes, as laid out by the compiler. The structs that hold pointers (C_ASSERT_32) have the
+// original's size only in a 32-bit build; none of them is written to a file as it is.
 C_ASSERT(sizeof(Account) == 0x40d0);
 C_ASSERT(sizeof(AccountV0) == 0x1b48);
 C_ASSERT(sizeof(AccountV2) == 0x3c00);
 C_ASSERT(sizeof(Beam) == 0x34);
-C_ASSERT(sizeof(BlitItem) == 0x20);
-C_ASSERT(sizeof(Bonus) == 0x64);
+C_ASSERT_32(sizeof(BlitItem) == 0x20);
+C_ASSERT_32(sizeof(Bonus) == 0x64);
 C_ASSERT(sizeof(BonusStats) == 0x60);
-C_ASSERT(sizeof(FallingHazard) == 0x58);
+C_ASSERT_32(sizeof(FallingHazard) == 0x58);
 C_ASSERT(sizeof(Box) == 0x10);
 C_ASSERT(sizeof(Card) == 0x18);
 C_ASSERT(sizeof(FadeColors) == 0x78);
-C_ASSERT(sizeof(DDSurface) == 0x4);
 C_ASSERT(sizeof(EndRect) == 0x10);
-C_ASSERT(sizeof(Enemy) == 0x3a8);
+C_ASSERT_32(sizeof(Enemy) == 0x3a8);
 C_ASSERT(sizeof(Explosion) == 0x4c);
 C_ASSERT(sizeof(FPair) == 0x8);
-C_ASSERT(sizeof(Flash) == 0x28);
+C_ASSERT_32(sizeof(Flash) == 0x28);
 C_ASSERT(sizeof(Flash34) == 0x34);
 C_ASSERT(sizeof(Pattern) == 0xbe0);
 C_ASSERT(sizeof(PatternPt) == 0x14);
 C_ASSERT(sizeof(FrameSet) == 0x20);
 C_ASSERT(sizeof(HiscoreData) == 0x30d4);
 C_ASSERT(sizeof(HiscoreEntry) == 0x68);
-C_ASSERT(sizeof(IntPair) == 0x8);
+C_ASSERT_32(sizeof(IntPair) == 0x8);
 C_ASSERT(sizeof(Level) == 0x1cb98);
-C_ASSERT(sizeof(LevelObj) == 0x8c);
+C_ASSERT_32(sizeof(LevelObj) == 0x8c);
 C_ASSERT(sizeof(LevelRaw) == 0x1cb98);
 C_ASSERT(sizeof(LevelRec) == 0x20);
 C_ASSERT(sizeof(LinkArea) == 0x14);
@@ -1849,50 +1910,50 @@ C_ASSERT(sizeof(LvRawObj) == 0x14);
 C_ASSERT(sizeof(LvRawQ) == 0x10);
 C_ASSERT(sizeof(LvRawSub) == 0x20);
 C_ASSERT(sizeof(LvSub) == 0x20);
-C_ASSERT(sizeof(MapObj) == 0xa0);
+C_ASSERT_32(sizeof(MapObj) == 0xa0);
 C_ASSERT(sizeof(MenuEntry) == 0x6c);
 C_ASSERT(sizeof(Name255) == 0xff);
-C_ASSERT(sizeof(ScorePopup) == 0x48);
-C_ASSERT(sizeof(EnemySet) == 0x22470);
+C_ASSERT_32(sizeof(ScorePopup) == 0x48);
+C_ASSERT_32(sizeof(EnemySet) == 0x22470);
 C_ASSERT(sizeof(Particle) == 0x54);
-C_ASSERT(sizeof(FreeParticle) == 0x68);
-C_ASSERT(sizeof(Player) == 0x4d8);
-C_ASSERT(sizeof(QuadItem) == 0x2c);
+C_ASSERT_32(sizeof(FreeParticle) == 0x68);
+C_ASSERT_32(sizeof(Player) == 0x4d8);
+C_ASSERT_32(sizeof(QuadItem) == 0x2c);
 C_ASSERT(sizeof(Rect16) == 0x10);
-C_ASSERT(sizeof(Ring) == 0x30);
-C_ASSERT(sizeof(SaveData) == 0x1370);
+C_ASSERT_32(sizeof(Ring) == 0x30);
+C_ASSERT_32(sizeof(SaveData) == 0x1370);
 C_ASSERT(sizeof(Settings) == 0x638);
 C_ASSERT(sizeof(SettingsV2) == 0x630);
 C_ASSERT(sizeof(ShipDef) == 0x24);
 C_ASSERT(sizeof(BurstSpark) == 0x34);
-C_ASSERT(sizeof(PulseFx) == 0x34);
-C_ASSERT(sizeof(AlienGfxSlot) == 0x54c);
+C_ASSERT_32(sizeof(PulseFx) == 0x34);
+C_ASSERT_32(sizeof(AlienGfxSlot) == 0x54c);
 C_ASSERT(sizeof(SoundQueueEntry) == 0x10);
 C_ASSERT(sizeof(Spark) == 0x60);
-C_ASSERT(sizeof(FallingSprite) == 0x54);
+C_ASSERT_32(sizeof(FallingSprite) == 0x54);
 C_ASSERT(sizeof(ScoopTrail) == 0x1c);
 C_ASSERT(sizeof(HyperspaceStar) == 0x18);
-C_ASSERT(sizeof(StretchItemF) == 0x1c);
-C_ASSERT(sizeof(StretchItemI) == 0x18);
-C_ASSERT(sizeof(StretchItemRot) == 0x20);
-C_ASSERT(sizeof(QuadImageItem) == 0x28);
+C_ASSERT_32(sizeof(StretchItemF) == 0x1c);
+C_ASSERT_32(sizeof(StretchItemI) == 0x18);
+C_ASSERT_32(sizeof(StretchItemRot) == 0x20);
+C_ASSERT_32(sizeof(QuadImageItem) == 0x28);
 C_ASSERT(sizeof(ButtonItem) == 0x11c);
-C_ASSERT(sizeof(ImageRectItem) == 0x18);
+C_ASSERT_32(sizeof(ImageRectItem) == 0x18);
 C_ASSERT(sizeof(LinkItem) == 0x218);
 C_ASSERT(sizeof(TextItem) == 0x10c);
 C_ASSERT(sizeof(MenuItem) == 0x6c);
 C_ASSERT(sizeof(ToggleItem) == 0x138);
 C_ASSERT(sizeof(EditItem) == 0x11c);
-C_ASSERT(sizeof(Window) == 0xdbc0);
+C_ASSERT_32(sizeof(Window) == 0xdbc0);
 
 // Member offsets the code depends on (moved here from the source files).
-C_ASSERT((int)&((Account*)0)->settings == 0x1510);
-C_ASSERT((int)&((Account*)0)->saveIdHistory == 0x3c08);
-C_ASSERT((int)&((Account*)0)->lastSaveId == 0x40b8);
-C_ASSERT((int)&((Account*)0)->medalOrder == 0x1b48);
-C_ASSERT((int)&((Account*)0)->names == 0x121);
-C_ASSERT((int)&((AccountV2*)0)->medalOrder == 0x1b40);
-C_ASSERT((int)&((Player*)0)->gameSpeedSetting == 0x4bc);
-C_ASSERT((int)&((Player*)0)->bonusResultsInitDone == 0x2d4);
-C_ASSERT((int)&((Player*)0)->scrollSpeedY == 0x298);
-C_ASSERT((int)&((Player*)0)->ship == 0x1d8);
+C_ASSERT(offsetof(Account, settings) == 0x1510);
+C_ASSERT(offsetof(Account, saveIdHistory) == 0x3c08);
+C_ASSERT(offsetof(Account, lastSaveId) == 0x40b8);
+C_ASSERT(offsetof(Account, medalOrder) == 0x1b48);
+C_ASSERT(offsetof(Account, names) == 0x121);
+C_ASSERT(offsetof(AccountV2, medalOrder) == 0x1b40);
+C_ASSERT_32(offsetof(Player, gameSpeedSetting) == 0x4bc);
+C_ASSERT_32(offsetof(Player, bonusResultsInitDone) == 0x2d4);
+C_ASSERT_32(offsetof(Player, scrollSpeedY) == 0x298);
+C_ASSERT_32(offsetof(Player, ship) == 0x1d8);

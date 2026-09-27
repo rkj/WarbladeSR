@@ -5,7 +5,7 @@
 #include "constants.h"
 #include "macros.h"
 
-// ---- util.cpp (0x52ea50)
+// ---- util.c (0x52ea50)
 void SeedRand(unsigned int seed);
 int StrLen(char *s);
 int StrHash(char *s);
@@ -20,18 +20,18 @@ void UpdateSlots(float dt);
 void DrawSlots(int minX, int maxX, int minY, int maxY);
 char ToLower(char c);
 void StrToLowerN(const char *src, char *dst, int max);
-KGraphic *LoadGraphic(char *name, bool maskAlpha, bool hiQuality);
-KGraphic *LoadGraphic2(char *name, bool maskAlpha, bool hiQuality);
+Image *LoadGraphic(char *name, bool maskAlpha, bool hiQuality);
+Image *LoadGraphic2(char *name, bool maskAlpha, bool hiQuality);
 
-// ---- resources.cpp (0x5300a0)
+// ---- resources.c (0x5300a0)
 void *LoadHma(const char *name, int w, int h);
-void DrawImage(KGraphic *g, int x1, int y1, int x2, int y2, unsigned char r, unsigned char gr, unsigned char b, unsigned char a, int unused, float angle);
+void DrawImage(Image *g, int x1, int y1, int x2, int y2, unsigned char r, unsigned char gr, unsigned char b, unsigned char a, int unused, float angle);
 char *Concat3(const char *a, const char *b, const char *c);
 bool VoiceExists(int voice);
 char *VoicePath(const char *name);
 char *SamplePath(const char *name);
 
-// ---- music.cpp (0x5308f0)
+// ---- music.c (0x5308f0)
 void FreePlaylist();
 void LoadPlaylist();
 int ParsePlaylist();
@@ -40,7 +40,7 @@ char *StrLower(char *s);
 bool OpenNextSong();
 int PlayRandomPlaylistSong();
 char *StrContains(char *s, const char *sub);
-void StopStream(BASS_DWORD h);
+void StopStream(AudioHandle h);
 void PlayNextMusic();
 void InitSampleTable();
 void SetSfxVolume(int vol);
@@ -53,18 +53,18 @@ void BuildRampTables();
 // (0x531a50)
 void StartMusic();
 
-// ---- sound.cpp (0x532a10)
+// ---- sound.c (0x532a10)
 void SoundResetQueue();
-int SampleLengthMs(BASS_DWORD sample);
-void SoundQueueAdd(BASS_DWORD sample, int delay, int vol);
-int SoundStop(BASS_DWORD ch);
+int SampleLengthMs(AudioHandle sample);
+void SoundQueueAdd(AudioHandle sample, int delay, int vol);
+int SoundStop(AudioHandle ch);
 void SoundPlayPending();
-void SoundPlay(BASS_DWORD sample, int freq, int vol, float pan, int unused1, int unused2);
-void SoundPlayNoFade(BASS_DWORD sample, int freq, int vol, float pan, int unused1, int unused2);
-void SoundPlaySlide(BASS_DWORD sample, int freq, int vol, float pan, int unused1, int unused2, BASS_DWORD attrib, float value, BASS_DWORD time);
-void SoundPlay2(BASS_DWORD sample, int freq, int vol, float pan, int unused1, int unused2);
-void SoundPlayVoice(BASS_DWORD sample, int freq, int vol, float pan, int unused1, int unused2);
-BASS_DWORD SoundPlayChannel(BASS_DWORD prev, BASS_DWORD sample, int freq, int vol, float pan, int a6);
+void SoundPlay(AudioHandle sample, int freq, int vol, float pan, int unused1, int unused2);
+void SoundPlayNoFade(AudioHandle sample, int freq, int vol, float pan, int unused1, int unused2);
+void SoundPlaySlide(AudioHandle sample, int freq, int vol, float pan, int unused1, int unused2, enum AudioAttrib attrib, float value, int time);
+void SoundPlay2(AudioHandle sample, int freq, int vol, float pan, int unused1, int unused2);
+void SoundPlayVoice(AudioHandle sample, int freq, int vol, float pan, int unused1, int unused2);
+AudioHandle SoundPlayChannel(AudioHandle prev, AudioHandle sample, int freq, int vol, float pan, int a6);
 void SoundQueueUpdate();
 void SoundStopAll();
 void SoundRestart();
@@ -72,21 +72,21 @@ void SoundPause();
 void SoundResume();
 
 // (0x533f30)
-BASS_DWORD LoadSample(const char *name, BASS_DWORD max);
-BASS_DWORD LoadSampleLoop(const char *name, BASS_DWORD max);
+AudioHandle LoadSample(const char *name, AudioHandle max);
+AudioHandle LoadSampleLoop(const char *name, AudioHandle max);
 
 // (0x534250)
 void FreeSamples();
 
 // (0x5351d0)
-BASS_DWORD LoadVoiceSample(const char *name, int mode);
+AudioHandle LoadVoiceSample(const char *name, int mode);
 void LoadVoices();
 void InitSound();
 
 // (0x536ca0)
 void SoundShutdown();
 
-// ---- savegame.cpp (0x537c80)
+// ---- savegame.c (0x537c80)
 void SaveProfile(int profile);
 void SetupDifficulty();
 
@@ -97,12 +97,16 @@ void LoadSuspended(int profile);
 bool ProfileValid(int profile);
 void DeleteProfile(int profile);
 void MakeProfilesDir();
+
+// ---- savefile.c (not in the original: the explicit suspended-game format)
+bool SaveGameToFile(const char *path);
+bool SaveFileValid(const char *path);
+bool LoadGameFromFile(const char *path);
 void MakeGameDir();
 __int64 MakeRandomId();
 int Rand7f();
 int Randff();
 int Rand1ff();
-__int64 ClampScore(__int64 t);
 void WinCloseAll();
 void WinInit();
 int WinFindFree();
@@ -110,11 +114,11 @@ int WinOpen(int x, int y, int w, int h, int mode);
 void WinHideAll();
 void WinClose(int win);
 
-// ---- window.cpp (0x53ae00)
+// ---- window.c (0x53ae00)
 void WinAddText(int x, int y, int win, char *text, int color);
 void WinAddTextPair(int x, int y, int win, int id, char *text1, char *text2, int a, int b);
-void WinAddRect(int a, int b, int c, int d, int win, KGraphic *e);
-void WinAddItemA(int a, int b, int c, int d, int e, int f, int g, int h, int win, int j);
+void WinAddRect(int a, int b, int c, int d, int win, Image *e);
+void WinAddItemA(int a, int b, int c, int d, int e, int f, int g, int h, int win, void *j);
 void WinAddItemB(int a, int b, int c, int d, int e, int f, char *text, int win);
 void EmptyWindowStub();
 void WinAddMenuItem(int x, int y, int win, int id, char *text, int param);
@@ -132,24 +136,14 @@ void WinFocusNextEdit(int win);
 // (0x53c870)
 void WinDraw(int win);
 
-// ---- net.cpp (0x540400)
+// (0x540400)
 float FabsWindow(float x);
 float FabsF(float x);
 void WinUpdateAll();
 bool ReturnTrueNet();
-void OpenUrl(char *url);
-bool FindTag(char *buf, int len, char *tag, char *out, int outLen);
-unsigned long ResolveHost(char *host);
-void MakeSockAddr(sockaddr_in *addr, char *host, unsigned short port);
-bool NetConnect(char *host);
-int NetRecv(char *buf, int size);
-bool NetSend(char *s);
-void NetClose();
-float ParseVersion(char *s);
-void CheckVersion();
 void DoNothing();
 
-// ---- account.cpp (0x540fb0)
+// ---- account.c (0x540fb0)
 void EmptyPostTransitionHook();
 void EmptyViewChangeHook();
 void SaveSetPro();
@@ -179,7 +173,6 @@ bool DecodeAccount(void *buf, int profile, int len);
 // (0x5447e0)
 void ScanProfiles();
 void MergeSettings(int slot);
-void CheckNews();
 void GetProfileName(int slot);
 bool GetProfileEasyFlag(int slot);
 bool GetProfileCfgFlag(int slot);
@@ -194,7 +187,7 @@ void ResetProfileLives(int slot);
 bool ProfileHistHas(int slot, __int64 v);
 void ProfileHistPush(int slot, __int64 v);
 
-// ---- stats.cpp (0x546080)
+// ---- stats.c (0x546080)
 void ShowHighScore(int profile);
 void UpdateHighScore(int profile, __int64 v);
 void ShowMarathonScore(int profile);
@@ -241,7 +234,6 @@ bool IsGameCompleted(int id);
 void MarkSecretFound(int id, int level);
 bool IsSecretFound(int id, int level);
 void ShowHighestLevelReached(int id);
-void MarkCheatDetected(int id);
 void UpdateHighestLevel(int id, int value);
 void ShowTotalLevelsPlayed(int id);
 void AddLevelsPlayed(int id, int amount);
@@ -266,35 +258,35 @@ void ProfileWindow(bool noButtons);
 // (0x54d440)
 void ApplyStatUnlocks();
 
-// ---- render.cpp (0x54e1f0)
+// ---- render.c (0x54e1f0)
 int EmptyEscGateCheck();
-void QueueStretchI(KGraphic *graphic, float x1, float y1, float x2, float y2, unsigned char r, unsigned char g, unsigned char b, unsigned char a);
-void QueueStretchF(KGraphic *graphic, float x1, float y1, float x2, float y2, unsigned char r, unsigned char g, unsigned char b, unsigned char a, unsigned char flag);
-void QueueStretchRot(KGraphic *graphic, float x1, float y1, float x2, float y2, unsigned char r, unsigned char g, unsigned char b, unsigned char a, unsigned char flag, float angle);
-void QueueStretchRot2(KGraphic *graphic, float x1, float y1, float x2, float y2, unsigned char r, unsigned char g, unsigned char b, unsigned char a, unsigned char flag, float angle);
-void QueueBlit(float destX, float destY, KGraphic *graphic, Rect16 *src);
-void QueueBlit2(float destX, float destY, KGraphic *graphic, Rect16 *src);
+void QueueStretchI(Image *graphic, float x1, float y1, float x2, float y2, unsigned char r, unsigned char g, unsigned char b, unsigned char a);
+void QueueStretchF(Image *graphic, float x1, float y1, float x2, float y2, unsigned char r, unsigned char g, unsigned char b, unsigned char a, unsigned char flag);
+void QueueStretchRot(Image *graphic, float x1, float y1, float x2, float y2, unsigned char r, unsigned char g, unsigned char b, unsigned char a, unsigned char flag, float angle);
+void QueueStretchRot2(Image *graphic, float x1, float y1, float x2, float y2, unsigned char r, unsigned char g, unsigned char b, unsigned char a, unsigned char flag, float angle);
+void QueueBlit(float destX, float destY, Image *graphic, Rect16 *src);
+void QueueBlit2(float destX, float destY, Image *graphic, Rect16 *src);
 void FlushStretchI();
 void FlushStretchF();
 void FlushStretchRot();
 void FlushStretchRot2();
 void FlushBlit(void *dst);
 void FlushBlit2(void *dst);
-void QueueQuad(KGraphic *unused, float v0, float v1, float v2, float v3, KGraphic *param, float v4, float v5, float v6, float v7);
+void QueueQuad(Image *unused, float v0, float v1, float v2, float v3, Image *param, float v4, float v5, float v6, float v7);
 
 // (0x54f6d0)
 void FlushQuads(void *dst);
-void DrawStretch(KGraphic *graphic, int dx, int dy, int dw, int dh, int sx, int sy, int sw, int sh);
+void DrawStretch(Image *graphic, int dx, int dy, int dw, int dh, int sx, int sy, int sw, int sh);
 void ClearParticles();
 int CountParticles();
-void AddParticle(KGraphic *graphic, int x, int y, float size, float sizeVel, float angle, float angleVel, int dir, int r, int g, int b, int alpha, float life, float speed, int spawn, float gravity, int mode, int *xref, int *kill, unsigned char flag);
+void AddParticle(Image *graphic, int x, int y, float size, float sizeVel, float angle, float angleVel, int dir, int r, int g, int b, int alpha, float life, float speed, int spawn, float gravity, int mode, int *xref, int *kill, unsigned char flag);
 void UpdateParticles();
 void DrawParticles();
 
 // (0x550900)
 void DrawBackground();
 
-// ---- effects.cpp (0x552040)
+// ---- effects.c (0x552040)
 void InitStarRotation();
 void CycleMusicFormat();
 void PlayClick();
@@ -311,15 +303,12 @@ int TallyStep(int count);
 void SpawnSpark(int x, int y, int r, int g, int b, int type, float speed, int angle, int delay, int fade, int trailInterval, int size);
 void UpdateSparks();
 void SpawnFirework();
-void AddSparkleFlash(KGraphic *graphic, int x, int y, int size, int r, int g, int b, int alpha, int fade);
+void AddSparkleFlash(Image *graphic, int x, int y, int size, int r, int g, int b, int alpha, int fade);
 void UpdateSparkleFlashes();
 int ReturnZero();
 void ResetPlayerTimers();
-void BeforeOpenLink();
 void NoOpEffects();
 void ClearPlayers();
-void NViewLibInit();
-void NViewLibFree();
 int ScanLeft(unsigned char *data, int left, int top, int width, int height, int pitch, int unusedImgH);
 int ScanTop(unsigned char *data, int left, int top, int width, int height, int pitch, int unusedImgH);
 int ScanRight(unsigned char *data, int left, int top, int width, int height, int pitch, int unusedImgH);
@@ -341,16 +330,13 @@ int CountTimeTrialLevels();
 int CheckTimeTrialAvailable();
 int CountClassicLevels();
 
-// ---- level.cpp (0x557330)
-bool BlockEquals(int idx, unsigned char *buf);
-void BlockSet(int idx, unsigned char *buf);
-void BlocksRandomize();
+// ---- level.c (0x557330)
 void FreeBuffers();
 int CopyBytes(void *src, void *dst, int size);
 void ReleaseAlienGfxCache();
 bool FindOtherSlotWithKey(int slot, int chan, int key);
-void BumpAlienGfxAge(KGraphic *snd);
-void DropAlienGfxAge(KGraphic *snd);
+void BumpAlienGfxAge(Image *snd);
+void DropAlienGfxAge(Image *snd);
 void StealOldestAlienGfx(int owner, short id);
 
 // (0x558d60)
@@ -373,7 +359,7 @@ void FreeSecretPicGfx();
 int LoadSecretPic(int idx);
 void FreeSecretScreenGfx();
 
-// ---- splash.cpp (0x55e630)
+// ---- splash.c (0x55e630)
 void ShowLogoSplash();
 void ShowTitleSplash();
 void ResetF893();
@@ -389,14 +375,12 @@ void DrawFlash();
 void Frame();
 void NewRank();
 
-// ---- shop.cpp (0x55f650)
+// ---- shop.c (0x55f650)
 void Shop();
 
-// ---- levelstart.cpp (0x5674a0)
+// ---- levelstart.c (0x5674a0)
 void ClipCursorOn();
 void ClipCursorOff();
-int CursorClipStubA();
-int CursorClipStubB();
 int ApplyBgTint();
 void PickBgTint();
 void FadeLoopSamples();
@@ -413,7 +397,7 @@ int StatSnapshotStub();
 // (0x569260)
 void StartLevel();
 
-// ---- items.cpp (0x56ff10)
+// ---- items.c (0x56ff10)
 void SpawnBonus(float x, float y);
 void SpawnItem(float x, float y, unsigned char rare);
 void SpawnWeaponItem(int x, int y);
@@ -432,7 +416,7 @@ void SpawnEliteFlyby();
 // (0x582120)
 void WarpMalfunction();
 
-// ---- collide.cpp (0x5834b0)
+// ---- collide.c (0x5834b0)
 void ItemsVsPlayer();
 void FindTargetItem();
 void FindTargetObj();
@@ -456,13 +440,12 @@ void PlayerShotsHitEnemies();
 void ShieldGrabEnemies();
 void ShieldGrabEnemiesBothPlayers();
 
-// ---- hurryup.cpp (0x58e350)
+// ---- hurryup.c (0x58e350)
 void HurryUp();
 
 // (0x58f550)
-void NewsTicker();
 
-// ---- screens.cpp (0x58fae0)
+// ---- screens.c (0x58fae0)
 void AboutScreen();
 
 // (0x591500)
@@ -486,7 +469,7 @@ void EmptyScreenStub();
 // (0x596dd0)
 void BonusScreen();
 
-// ---- main.cpp (0x59aac0)
+// ---- main.c (0x59aac0)
 bool GameInit();
 void ResetObjects();
 void ResetAllObjects();
@@ -494,38 +477,28 @@ void ResetObjectsKeep();
 void DrawRankPromoBanner();
 
 // (0x59c3a0)
-LONG CrashHandler(EXCEPTION_POINTERS *ep);
 
 // (0x59d710)
-void FormatFileTime(char *out, FILETIME ft);
-int CrashFilter(EXCEPTION_POINTERS *ep);
-bool DetectCheatTools();
-void ShowNewsWait();
-void FixHiscores();
-bool IsFirewallTestDone();
-void SetFirewallTestDone();
-bool IsWindows7MessageDone();
-void SetWindows7MessageDone();
-bool IsScreenTestDone();
-void SetScreenTestDone();
 unsigned int GetFlagMask(unsigned char joy);
-// defined `void` (main.cpp); player.cpp reads the value the inner PTK call leaves in eax, so it declares its own `int` version
+// defined `void` (main.c); player.c reads the value the inner PTK call leaves in eax, so it declares its own `int` version
 void GetJoyX(unsigned char joy);
 // as GetJoyX
 void GetJoyY(unsigned char joy);
 void OpenCreateProfileWin();
-bool MsgHook(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+void OnFocusChange(bool focused);
 
 // (0x59f1a0)
 int GameMain();
 
-// ---- init.cpp (0x5a15b0)
+// ---- init.c (0x5a15b0)
 float Cos2(float a);
 float Cos(float a);
 float Sin2(float a);
 float Sin(float a);
 bool ResetClip();
-bool InitWindow(bool tryDirectX, bool windowed);
+bool InitWindow(bool windowed);
+int RendererChoiceOf(int value);
+const char *RendererLabel(int choice);
 int InitWindowCfg();
 
 // (0x5a1d50)
@@ -540,7 +513,7 @@ void AddMenuItem(int x, int y, const char *text, int page, int id, int parent, i
 // (0x5a56a0)
 void InitMenu();
 
-// ---- intro.cpp (0x5a67b0)
+// ---- intro.c (0x5a67b0)
 void HidePageButtons(int owner);
 void DrawButtons(int page);
 void DrawFrame(int x1, int y1, int x2, int y2, char *title);
@@ -553,7 +526,7 @@ void DrawFlashes();
 // (0x5a82f0)
 void IntroFrame();
 
-// ---- gameflow.cpp (0x5aa9b0)
+// ---- gameflow.c (0x5aa9b0)
 void ResetToTitle();
 void ShowHiscoreTable();
 void UpdateGetReadyRespawn();
@@ -581,29 +554,18 @@ void GameFrame();
 // (0x5b2f40)
 void NewGame(bool resetLevel);
 
-// ---- online.cpp (0x5b3e10)
+// (0x5b3e10)
 void Logout();
 char KeyToChar(int key);
 void ResetFlags();
-bool SerialValid();
-bool CheckSerialOnline(char *serial);
 int CurMonth();
 int CurYear();
-int StatCount(int t);
-int StatSum13(int t);
-int StatSum14(int t);
-int StatSum15(int t);
-int StatSum16(int t);
-int EntryMonth(HiscoreEntry e);
-int EntryYear(HiscoreEntry e);
 
 // (0x5b53d0)
-bool UploadScores();
 
 // (0x5b6f20)
-bool PasteKeyFromClipboard();
 
-// ---- menu.cpp (0x5b7080)
+// ---- menu.c (0x5b7080)
 void MenuUpdate(bool moved);
 
 // (0x5bf570)
@@ -613,7 +575,7 @@ void TakeScreenshot();
 // (0x5bfac0)
 void MenuHandler();
 
-// ---- hiscore.cpp (0x5c6110)
+// ---- hiscore.c (0x5c6110)
 int CheckHiscore(int p);
 
 // (0x5c6940)
@@ -631,7 +593,7 @@ void UpdateGameOverSequence();
 // (0x5c8ee0)
 void EnterHiscore();
 
-// ---- controls.cpp (0x5cb410)
+// ---- controls.c (0x5cb410)
 void KeyName(int key);
 void ButtonName(int type, int button);
 void FixDuplicateKeys(int player);
@@ -644,7 +606,7 @@ void GetPressedKeyName();
 // (0x5cdd40)
 void ConfigInputMenu();
 
-// ---- text.cpp (0x5cfcd0)
+// ---- text.c (0x5cfcd0)
 void DrawMenuText(const char *text, int x, int y, int row);
 void DrawScoreDigits(const char *text, int x, int y, int a, float scale);
 void DrawTinyText(const char *text, int x, int y, int row);
@@ -660,15 +622,14 @@ void DrawBigText(int x, int y, const char *text);
 // (0x5d44c0)
 void DrawTextFrame(const char *text, int x, int y, int style);
 void DrawTinyTextAlt(const char *text, int x, int y, int row);
-void Blit(int x, int y, KGraphic *dst, KGraphic *graphic, int sx, int sy, int w, int h);
-void Blit2(int x, int y, void *dst, KGraphic *graphic, int sx, int sy, int w, int h);
-void BlitLocal(int x, int y, void *dst, KGraphic *graphic, int sx, int sy, int w, int h);
-void BlitLocal2(int x, int y, KGraphic *dst, KGraphic *graphic, int sx, int sy, int w, int h);
-void BltFastClipped(int x, int y, DDSurface *dst, DDSurface *srcSurf, int sx, int sy, int w, int h);
+void Blit(int x, int y, Image *dst, Image *graphic, int sx, int sy, int w, int h);
+void Blit2(int x, int y, void *dst, Image *graphic, int sx, int sy, int w, int h);
+void BlitLocal(int x, int y, void *dst, Image *graphic, int sx, int sy, int w, int h);
+void BlitLocal2(int x, int y, Image *dst, Image *graphic, int sx, int sy, int w, int h);
 void EmptyTextStubA();
 void EmptyTextStubB();
 
-// ---- hud.cpp (0x5d59f0)
+// ---- hud.c (0x5d59f0)
 void Hud(int p, int x, int meterX);
 
 // (0x5d82c0)
@@ -702,7 +663,7 @@ void MemoryStationText();
 // (0x5dcd80)
 void DrawMeteorStorm();
 
-// ---- fx.cpp (0x5de1a0)
+// ---- fx.c (0x5de1a0)
 void DrawGemDropBanner();
 void RenderMemoryStationFrame();
 void RenderMeteorStormRaceFrame();
@@ -725,7 +686,7 @@ int CountTypePairs();
 // (0x5e16c0)
 void MemoryBonusUpdate();
 
-// ---- player.cpp (0x5ea0f0)
+// ---- player.c (0x5ea0f0)
 bool IsKeyFree(int key);
 int InputLeft(int p);
 int InputRight(int p);
@@ -758,7 +719,7 @@ void DrawScorePopups();
 void DrawNumberRow(const char *s, int x, int y, int row);
 void SpawnItems();
 
-// ---- bonusround.cpp (0x5f4210)
+// ---- bonusround.c (0x5f4210)
 void UpdateItems();
 void UpdateStarItems();
 
@@ -798,7 +759,7 @@ void OnGemDropLevelEnd();
 // (0x5f8fe0)
 void PlayRankPromotionSounds();
 
-// ---- levelupdate.cpp (0x5f9f30)
+// ---- levelupdate.c (0x5f9f30)
 void OnLevelComplete();
 
 // (0x5f9f60)
@@ -820,7 +781,7 @@ void GemDropCollide(int p);
 // (0x6014f0)
 void GemDropUpdate();
 
-// ---- levelobj.cpp (0x601cd0)
+// ---- levelobj.c (0x601cd0)
 void UpdateLevelObjects();
 
 // (0x603290)
@@ -836,13 +797,13 @@ void DrawLevelObjectsBright();
 // (0x605ef0)
 int NearPlayerFireBoost(int x, int val);
 
-// ---- enemies.cpp (0x605fe0)
+// ---- enemies.c (0x605fe0)
 void UpdateEnemies();
 
 // (0x618560)
 void DrawEnemies();
 
-// ---- stars.cpp (0x61b610)
+// ---- stars.c (0x61b610)
 void UpdateHyperspace();
 
 // (0x61ca10)
@@ -860,13 +821,13 @@ void DrawBossBar();
 void NoOpStars();
 void DrawBorders();
 
-// ---- mapobj.cpp (0x61fff0)
+// ---- mapobj.c (0x61fff0)
 void UpdateMapObjects();
 
 // (0x6211e0)
 void DrawMapObjects();
 
-// ---- explosions.cpp (0x622150)
+// ---- explosions.c (0x622150)
 void UpdateExplosions();
 void DrawExplosions();
 void UpdateExplosionDebris();
@@ -877,10 +838,8 @@ void PlacePlayer(int p);
 // (0x623980)
 void InitPlayer(int p);
 
-// ---- platform.cpp (0x624a20)
+// ---- platform.c (0x624a20)
 void SetStateByMode();
-void PumpMessages();
-int RestoreSurfaces();
 void InitTablePtrs();
 int ParseInt(char **p, int def);
 void Shutdown();
@@ -893,21 +852,13 @@ int StrLenPlat(char *s);
 int MaskCollide(int x1, int y1, int x2, int y2, int x3, int y3, int x4, int y4, unsigned char *maskA, unsigned char *maskB, Rect16 boxA, Rect16 boxB, int pitchA, int pitchB, int hA, int hB, int enable);
 int MaskCollide2(int x1, int y1, int x2, int y2, int x3, int y3, int x4, int y4, unsigned char *maskA, unsigned char *maskB, int ax1, int ay1, int ax2, int ay2, int bx1, int by1, int bx2, int by2, int pitchA, int pitchB, int hA, int hB, int enable);
 void StrUpper(char *s);
-int ScanToAscii(UINT scan, LPWORD out);
 
 // (0x6262d0)
-char ScanToUpperChar(int scan);
-void ScanToKeyName(int scan);
 int GetDaySeconds();
 void LogInit();
 void LogPrint(const char *s);
-DWORD GetMemAvailPhys();
-DWORD GetMemTotalPhys();
 
 // (0x626ce0)
-DWORD GetMemAvailVirtual();
-DWORD GetMemTotalVirtual();
-DWORD GetMemMemoryLoad();
 void StampTimeA();
 void StampTimeB();
 void StampTimeC();
@@ -923,6 +874,14 @@ void TimerReset2();
 // (0x6274d0)
 int ClampX(int x);
 int ClampY(int y);
-DWORD DDColorMatch(IDirectDrawSurface7 *pdds, COLORREF rgb);
-HRESULT DDSetColorKey(IDirectDrawSurface7 *pdds, COLORREF rgb);
-void GetVidMem(IDirectDraw7 *pdd);
+
+// ---- weblinks.c (not in the original: links go to Wayback Machine snapshots)
+const char *ArchiveUrl(const char *url);
+
+// static_init.c
+void InitStaticGlobals(void);
+void OpenUrl(const char *url);
+void BeforeOpenLink();
+
+// ---- main.c (not in the original)
+void LogCrashReport(const char *reason);
