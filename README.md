@@ -34,6 +34,24 @@ I intentionally didn't want to change too much about the game without good reaso
 - Asset loading during startup has been significantly sped up by detatching it from the framerate
 - Intro sequence now handles window closing instead of only closing when it reaches the main menu
 
+#### Cheats
+
+Not part of the original game. During play, type `GALAGA` to toggle cheats (the code only uses letters that aren't in-game hotkeys). While cheats are on, the number keys (top row or numpad) apply to the current player:
+
+| Key | Cheat |
+| --- | --- |
+| `1` | Extra life |
+| `2` | +1000 money (up to the wallet size) |
+| `3` | Skip level (warp) |
+| `4` | Best weapon: WAR.I.PLASMA with max bullets |
+| `5` | Full armour |
+| `6` | Max rockets + super autofire |
+| `7` | Shield |
+| `8` | Smart bomb |
+| `9` | God mode on/off |
+
+Scores and profile stats from a cheated game are recorded as normal.
+
 #### Interpolation
 
 Due to the way Warblade intertangles logic ticks and rendering, it's not possible to get true >60FPS rendering without altering the game logic, which isn't want I want to do.

@@ -887,3 +887,8 @@ void BeforeOpenLink();
 
 // ---- main.c (not in the original)
 void LogCrashReport(const char *reason);
+
+// ---- cheats.c (not in the original)
+extern bool g_cheatsOn;
+extern bool g_cheatGodMode;
+void CheatHotkeys();
