@@ -6,6 +6,10 @@ This repository contains no game assets and as such cannot be used without them.
 
 This decompilation is possible mainly due to the fact that Edgar released 1.34 as a debug build. This made it much more feasible to convert ~660 compiled functions back into their C++ form, on top of being able to cut out the PTK library (which is not available anymore) and delink it back into an object file. However this also means it's not possible to compile an exact byte-matching .exe to the original version, since it contains some debug-time patching that the compiler didn't do.
 
+### Rights
+
+Warblade, including its code, graphics, music, sound and level data, is © Edgar M. Vigdal / EMV Software AS (Norwegian org. no. 992 221 615). Edgar passed away in 2015, and EMV Software AS remains an active company. This is an unofficial, non-commercial fan preservation project. It is not affiliated with or endorsed by EMV Software AS. No game assets are included, and you need your own copy of Warblade 1.34 to build or run it. If you represent EMV Software AS and have concerns about this project, please open an issue and we will respond promptly.
+
 As a disclaimer, this project did use a lot of LLM work (shoutout to Claude), particularly for determining the build flags, the grunt work in converting x86 back to C++, and delinking PTK. It also helped quite a bit with documentation and cleaning up the code while preserving function-level byte matching, so please excuse the comment litter.
 
 -------------
