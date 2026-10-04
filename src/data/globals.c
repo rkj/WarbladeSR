@@ -1042,7 +1042,9 @@ unsigned char g_pad_af6038[8];
 #pragma bss_seg(".bss$gaf6040")
 __int64 g_playTimeFt;
 #pragma bss_seg(".bss$gaf6048")
-float g_panTable[319];
+// BuildRampTables fills one entry per screen column; the decompile had 319, and the rest spilled
+// into the padding after it.
+float g_panTable[800];   // the screen width (g_screenW)
 #pragma bss_seg(".bss$gaf6544")
 float g_pan;
 #pragma bss_seg(".bss$gaf6548")

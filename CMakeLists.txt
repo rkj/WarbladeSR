@@ -60,11 +60,15 @@ else()
     # bss_seg/data_seg pragmas; keep the same order here in case code still reaches across
     # from one global into the next, as the original binary could. GCC needs telling; Clang
     # (no such flag) emits globals in definition order anyway.
+    # It's also built as one data section, so a linker that drops unused data (wasm-ld does)
+    # keeps the original's padding globals, which overruns like that may land in.
     include(CheckCCompilerFlag)
+    set(_globals_options -fno-data-sections)
     check_c_compiler_flag(-fno-toplevel-reorder HAVE_NO_TOPLEVEL_REORDER)
     if(HAVE_NO_TOPLEVEL_REORDER)
-        set_source_files_properties(src/data/globals.c PROPERTIES COMPILE_OPTIONS -fno-toplevel-reorder)
+        list(APPEND _globals_options -fno-toplevel-reorder)
     endif()
+    set_source_files_properties(src/data/globals.c PROPERTIES COMPILE_OPTIONS "${_globals_options}")
 endif()
 
 if(WARBLADE_ASAN AND MSVC)
