@@ -9,8 +9,6 @@ services:
     volumes:
       - ./game/data:/data:ro          # your Warblade 1.34 data folder (warblade.pac, music, samples)
       - warblade-saves:/saves         # profiles, saves, settings and high scores
-    environment:
-      WARBLADE_PASSWORD: ""           # set to require a password (user "warblade")
     restart: unless-stopped
 
 volumes:

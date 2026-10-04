@@ -4,7 +4,6 @@ Serves the browser build, the Warblade data mounted at /data (read-only) and the
 mounted at /saves, which the page keeps in sync with the game's /save folder:
 
   GET  /                      the page, warblade.js, warblade.wasm
-  GET  /healthz               "ok" (no password: for health checks)
   GET  /api/data              {"files": [{"path", "size"}]} of the data folder (404: no data)
   GET  /data/<path>           a data file
   GET  /api/saves             {"files": [{"path", "size"}]} of the save folder
@@ -13,14 +12,10 @@ mounted at /saves, which the page keeps in sync with the game's /save folder:
   DELETE /saves/<path>        removes a save file
 
 Settings come from the environment:
-  WARBLADE_PASSWORD   if set, every request needs HTTP basic auth with this password
-  WARBLADE_USER       the basic-auth user name (default "warblade")
   PORT                the port to listen on (default 8080)
 
 Standard library only.
 """
-import base64
-import hmac
 import json
 import mimetypes
 import os
@@ -32,8 +27,6 @@ from urllib.parse import unquote, urlsplit
 WEB_DIR = os.environ.get("WARBLADE_WEB", "/app/web")
 DATA_MOUNT = os.environ.get("WARBLADE_DATA", "/data")
 SAVES_DIR = os.environ.get("WARBLADE_SAVES", "/saves")
-PASSWORD = os.environ.get("WARBLADE_PASSWORD", "")
-USER = os.environ.get("WARBLADE_USER", "warblade")
 PORT = int(os.environ.get("PORT", "8080"))
 MAX_SAVE_BYTES = 16 * 1024 * 1024
 
@@ -89,23 +82,9 @@ class Handler(SimpleHTTPRequestHandler):
 
     # ---- helpers ----
 
-    def authorized(self):
-        if not PASSWORD:
-            return True
-        header = self.headers.get("Authorization", "")
-        if header.startswith("Basic "):
-            try:
-                user, _, password = base64.b64decode(header[6:]).decode("utf-8").partition(":")
-            except ValueError:
-                return False
-            return hmac.compare_digest(user, USER) and hmac.compare_digest(password, PASSWORD)
-        return False
-
     def send_plain(self, code, text=""):
         body = text.encode("utf-8")
         self.send_response(code)
-        if code == 401:
-            self.send_header("WWW-Authenticate", 'Basic realm="Warblade"')
         self.send_header("Content-Type", "text/plain; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
@@ -155,10 +134,6 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         path = urlsplit(self.path).path
-        if path == "/healthz":
-            return self.send_plain(200, "ok")
-        if not self.authorized():
-            return self.send_plain(401, "password required")
         if path == "/api/data":
             data = find_data_dir()
             if data is None:
@@ -179,8 +154,6 @@ class Handler(SimpleHTTPRequestHandler):
         self.do_GET()
 
     def do_PUT(self):
-        if not self.authorized():
-            return self.send_plain(401, "password required")
         path = urlsplit(self.path).path
         full = safe_join(SAVES_DIR, path[len("/saves/"):]) if path.startswith("/saves/") else None
         if full is None:
@@ -207,8 +180,6 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_plain(204)
 
     def do_DELETE(self):
-        if not self.authorized():
-            return self.send_plain(401, "password required")
         path = urlsplit(self.path).path
         full = safe_join(SAVES_DIR, path[len("/saves/"):]) if path.startswith("/saves/") else None
         if full is None:
@@ -231,9 +202,8 @@ class Handler(SimpleHTTPRequestHandler):
 def main():
     os.makedirs(SAVES_DIR, exist_ok=True)
     data = find_data_dir()
-    print("Warblade SR on port %d; data: %s; saves: %s; password: %s" % (
-        PORT, data or "none (players choose their own folder)", SAVES_DIR,
-        "on" if PASSWORD else "off"), flush=True)
+    print("Warblade SR on port %d; data: %s; saves: %s" % (
+        PORT, data or "none (players choose their own folder)", SAVES_DIR), flush=True)
     ThreadingHTTPServer(("", PORT), Handler).serve_forever()
 
 
