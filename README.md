@@ -171,6 +171,8 @@ docker run -d -p 8080:8080 \
 
 Then open http://localhost:8080. `docker-compose.yml` does the same with `docker compose up -d`.
 
+Instead of building it, you can pull the image GitHub Actions builds from `sdl` (`.github/workflows/docker.yml`): `ghcr.io/rkj/warbladesr:latest`, also tagged `sdl` and `sha-<commit>`. While the package is private, log in first with a GitHub token that has `read:packages`: `docker login ghcr.io -u <github user>`.
+
 - `/data`: your Warblade 1.34 `data` folder (with `warblade.pac`, `music`, `samples`), read-only. Mounting the whole installation folder works too.
 - `/saves`: the game's user folder. The page loads it into the game, and every few seconds (and when the tab is hidden) sends back the files the game changed, so saves follow you between browsers and devices.
 - The saves are shared by everyone using the server, like one PC: players get their own profiles in the game's profile menu. Two people playing at the same time can overwrite each other's settings file.
