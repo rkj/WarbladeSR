@@ -11,9 +11,9 @@
 // The program's `main`: the CRT's mainCRTStartup calls it with (argc, argv, envp), which it
 // ignores (the exe is a GUI program linked with /ENTRY:mainCRTStartup). The linker maps
 // `main` to this name (x86 C names carry a leading underscore, x64 ones don't).
-#ifdef _WIN64
+#if defined(_MSC_VER) && defined(_WIN64)
 #pragma comment(linker, "/alternatename:main=GameMain")
-#else
+#elif defined(_MSC_VER)
 #pragma comment(linker, "/alternatename:_main=_GameMain")
 #endif
 
@@ -571,7 +571,7 @@ void LogCrashReport(const char *reason)
     LogPrint("**** PLAYER ONE ****\r\n");
     sprintf(sMsg, " On level: %d\r\n", g_save.players[0].level);
     LogPrint(sMsg);
-    sprintf(sMsg, "    Score: %I64d\r\n", g_save.players[0].score);
+    sprintf(sMsg, "    Score: %lld\r\n", (long long)g_save.players[0].score);
     LogPrint(sMsg);
     sprintf(sMsg, "   Weapon: %d\r\n", g_save.players[0].weapon);
     LogPrint(sMsg);
@@ -588,7 +588,7 @@ void LogCrashReport(const char *reason)
     LogPrint("**** PLAYER TWO ****\r\n");
     sprintf(sMsg, " On level: %d\r\n", g_save.players[1].level);
     LogPrint(sMsg);
-    sprintf(sMsg, "    Score: %I64d\r\n", g_save.players[1].score);
+    sprintf(sMsg, "    Score: %lld\r\n", (long long)g_save.players[1].score);
     LogPrint(sMsg);
     sprintf(sMsg, "   Weapon: %d\r\n", g_save.players[1].weapon);
     LogPrint(sMsg);
@@ -632,3 +632,11 @@ void OnFocusChange(bool focused)
             SoundPause();
     }
 }
+
+#ifndef _MSC_VER
+// Other compilers have no /alternatename: a plain main.
+int main(void)
+{
+    return GameMain();
+}
+#endif

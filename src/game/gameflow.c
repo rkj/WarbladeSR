@@ -1605,22 +1605,22 @@ void NewGame(bool resetLevel)
     if (!g_newGameOnClose) {
         switch (g_gameMode) {
         case MODE_SINGLE:
-            g_save.players[0].ship = RandRange(0, 10);
+            g_save.players[0].ship = RandRange(0, NUM_SHIPS);
             break;
         case MODE_TWO_PLAYER:
-            g_save.players[0].ship = RandRange(0, 10);
-            g_save.players[1].ship = RandRange(0, 10);
+            g_save.players[0].ship = RandRange(0, NUM_SHIPS);
+            g_save.players[1].ship = RandRange(0, NUM_SHIPS);
             break;
         case MODE_DUAL:
-            g_save.players[0].ship = RandRange(0, 10);
-            g_save.players[1].ship = RandRange(0, 10);
+            g_save.players[0].ship = RandRange(0, NUM_SHIPS);
+            g_save.players[1].ship = RandRange(0, NUM_SHIPS);
             break;
         case MODE_TEAM:
             break;
         case MODE_UNUSED_4:
             break;
         case MODE_TIME_TRIAL:
-            g_save.players[0].ship = RandRange(0, 10);
+            g_save.players[0].ship = RandRange(0, NUM_SHIPS);
             break;
         }
     }

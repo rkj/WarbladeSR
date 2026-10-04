@@ -665,19 +665,19 @@ int InitFail(const char *msg)
     return 0;
 }
 
-// Points each ship-stats table pointer at its backing data array.
+// Points each ship type's definition at its stats array.
 void InitTablePtrs()
 {
-    g_shipStatsPtr2 = g_shipStats2;
-    g_shipStatsPtr9 = g_shipStats9;
     g_shipDefs[0] = (ShipDef *)g_shipStats0;
-    g_shipStatsPtr7 = g_shipStats7;
-    g_shipStatsPtr1 = g_shipStats1;
-    g_shipStatsPtr5 = g_shipStats5;
-    g_shipStatsPtr6 = g_shipStats6;
-    g_shipStatsPtr3 = g_shipStats3;
-    g_shipStatsPtr8 = g_shipStats8;
-    g_shipStatsPtr4 = g_shipStats4;
+    g_shipDefs[1] = (ShipDef *)g_shipStats1;
+    g_shipDefs[2] = (ShipDef *)g_shipStats2;
+    g_shipDefs[3] = (ShipDef *)g_shipStats3;
+    g_shipDefs[4] = (ShipDef *)g_shipStats4;
+    g_shipDefs[5] = (ShipDef *)g_shipStats5;
+    g_shipDefs[6] = (ShipDef *)g_shipStats6;
+    g_shipDefs[7] = (ShipDef *)g_shipStats7;
+    g_shipDefs[8] = (ShipDef *)g_shipStats8;
+    g_shipDefs[9] = (ShipDef *)g_shipStats9;
 }
 
 #define FREE_NULL(p) if (p) { free(p); p = 0; }

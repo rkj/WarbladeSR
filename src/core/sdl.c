@@ -16,6 +16,10 @@
 // - Key codes stay PTK's (they are stored in WarBlade.inf); letters, digits and punctuation
 //   follow the keyboard layout, as Windows virtual keys did.
 #include <string.h>
+#ifndef _WIN32
+#include <dirent.h>
+#include <unistd.h>
+#endif
 #include <SDL3/SDL.h>
 #include <SDL3_image/SDL_image.h>
 #include "sdlhelp.h"
@@ -352,7 +356,7 @@ void SysSetWorldView(float x, float y, float rotation, float zoom, bool clear)
 
 void SysSetIcon(const char *icoFile)
 {
-    SDL_Surface *icon = IMG_Load(icoFile);
+    SDL_Surface *icon = IMG_Load(SysPath(icoFile));
     if (icon) {
         SDL_SetWindowIcon(s_window, icon);
         SDL_DestroySurface(icon);
@@ -373,7 +377,7 @@ bool SysScreenshot(const char *file, int w, int h)
         if (shot == NULL)
             return false;
     }
-    ok = IMG_SaveJPG(shot, file, 90);
+    ok = IMG_SaveJPG(shot, SysPath(file), 90);
     SDL_DestroySurface(shot);
     return ok;
 }
@@ -500,6 +504,11 @@ const char *SysUserFolder(void)
     static char folder[1024];
     if (folder[0] == 0) {
         const char *docs = SDL_GetUserFolder(SDL_FOLDER_DOCUMENTS);
+#ifndef _WIN32
+        // Not every Linux home has a Documents folder.
+        if (docs == NULL || !SDL_GetPathInfo(docs, NULL))
+            docs = SDL_GetUserFolder(SDL_FOLDER_HOME);
+#endif
         CopyPath(folder, sizeof(folder), docs ? docs : SDL_GetBasePath());
     }
     return folder;
@@ -513,14 +522,85 @@ const char *SysAppPath(const char *rel)
     return path;
 }
 
+#ifdef _WIN32
+const char *SysPath(const char *path)
+{
+    return path;
+}
+#else
+// Finds the entry of folder `dir` named `name` ignoring case, into `out`; false if none.
+static bool FindNoCase(const char *dir, const char *name, char *out, size_t size)
+{
+    DIR *d = opendir(dir[0] ? dir : ".");
+    struct dirent *e;
+    bool found = false;
+
+    if (d == NULL)
+        return false;
+    while ((e = readdir(d)) != NULL) {
+        if (SDL_strcasecmp(e->d_name, name) == 0) {
+            SDL_strlcpy(out, e->d_name, size);
+            found = true;
+            break;
+        }
+    }
+    closedir(d);
+    return found;
+}
+
+const char *SysPath(const char *path)
+{
+    static char bufs[4][1024];
+    static int next;
+    char *out = bufs[next];
+    const size_t size = sizeof(bufs[0]);
+    char name[256];
+    char real[256];
+    size_t len;
+    const char *p = path;
+
+    next = (next + 1) % 4;
+    out[0] = 0;
+    if (*p == '/' || *p == '\\')
+        SDL_strlcpy(out, "/", size);
+    while (*p) {
+        size_t n;
+        while (*p == '/' || *p == '\\')
+            p++;
+        for (n = 0; p[n] && p[n] != '/' && p[n] != '\\'; n++)
+            ;
+        if (n == 0)
+            break;
+        SDL_strlcpy(name, p, n + 1 < sizeof(name) ? n + 1 : sizeof(name));
+        p += n;
+
+        // `out` is the folder so far ("" for the current one); add this component to it,
+        // spelled as on disk if only a different case exists.
+        len = strlen(out);
+        if (len > 0 && out[len - 1] != '/' && len + 1 < size)
+            out[len++] = '/';
+        out[len] = 0;
+        SDL_strlcat(out, name, size);
+        if (access(out, F_OK) != 0) {
+            out[len] = 0;
+            if (FindNoCase(out, name, real, sizeof(real)))
+                SDL_strlcat(out, real, size);
+            else
+                SDL_strlcat(out, name, size);
+        }
+    }
+    return out;
+}
+#endif
+
 bool SysFileExists(const char *path)
 {
-    return SDL_GetPathInfo(path, NULL);
+    return SDL_GetPathInfo(SysPath(path), NULL);
 }
 
 bool SysMakeDir(const char *path)
 {
-    return SDL_CreateDirectory(path);
+    return SDL_CreateDirectory(SysPath(path));
 }
 
 void SysOpenUrl(const char *url)
@@ -573,7 +653,7 @@ void PacAddArchive(const char *path)
     Sint64 pos = 0;
     int cap = 0;
 
-    s_pac = SDL_IOFromFile(path, "rb");
+    s_pac = SDL_IOFromFile(SysPath(path), "rb");
     if (s_pac == NULL) {
         SDL_Log("Could not open %s: %s", path, SDL_GetError());
         return;
@@ -618,7 +698,7 @@ static void *PacLoad(const char *name, size_t *size)
     void *data;
 
     if (e == NULL)
-        return SDL_LoadFile(name, size);
+        return SDL_LoadFile(SysPath(name), size);
     data = SDL_malloc((size_t)e->size + 1);
     if (data == NULL)
         return NULL;
@@ -634,7 +714,7 @@ static void *PacLoad(const char *name, size_t *size)
 
 bool PacExists(const char *name)
 {
-    return PacFind(name) != NULL || SDL_GetPathInfo(name, NULL);
+    return PacFind(name) != NULL || SDL_GetPathInfo(SysPath(name), NULL);
 }
 
 // A file shorter than `size` fills only its own length of `buf`.

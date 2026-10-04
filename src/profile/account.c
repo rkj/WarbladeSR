@@ -296,8 +296,12 @@ void PackAccount(int profile)
         bytePtr = (char *)&g_accBuf[profile];
         for (i = 0; i < SIZEOF_ACCOUNT; i++, bytePtr++)
             *bytePtr = RandRange(0, 0xff);
-        res = compress((unsigned char *)&g_accBuf[profile], (unsigned long *)&g_accSizes[profile],
-                       (const unsigned char *)&g_acc, g_accSize);
+        {
+            uLongf packed = (uLongf)g_accSizes[profile];   // zlib's sizes are `unsigned long`
+            res = compress((unsigned char *)&g_accBuf[profile], &packed,
+                           (const unsigned char *)&g_acc, g_accSize);
+            g_accSizes[profile] = (int)packed;
+        }
         memset(&g_acc, 0, SIZEOF_ACCOUNT);
     }
 }
@@ -311,8 +315,12 @@ void UnpackAccount(int profile)
 
         g_accSize = SIZEOF_ACCOUNT;
         g_accSizes[profile] = SIZEOF_ACCOUNT;
-        res = uncompress((unsigned char *)&g_acc, (unsigned long *)&g_accSize,
-                         (const unsigned char *)&g_accBuf[profile], g_accSizes[profile]);
+        {
+            uLongf unpacked = (uLongf)g_accSize;   // zlib's sizes are `unsigned long`
+            res = uncompress((unsigned char *)&g_acc, &unpacked,
+                             (const unsigned char *)&g_accBuf[profile], g_accSizes[profile]);
+            g_accSize = (int)unpacked;
+        }
         if (res != 0) {
             ResetAccount();
             PackAccount(profile);
@@ -427,8 +435,12 @@ bool DecodeAccount(void *buf, int profile, int len)
 
     ok = true;
     g_accSize = SIZEOF_ACCOUNT;
-    res = uncompress((unsigned char *)&g_acc, (unsigned long *)&g_accSize,
-                     (const unsigned char *)buf, g_accSizes[profile]);
+    {
+        uLongf unpacked = (uLongf)g_accSize;   // zlib's sizes are `unsigned long`
+        res = uncompress((unsigned char *)&g_acc, &unpacked,
+                         (const unsigned char *)buf, g_accSizes[profile]);
+        g_accSize = (int)unpacked;
+    }
     if (res == 0) {
 
         // v0 -> v1: high scores were 32-bit; widen them to __int64.

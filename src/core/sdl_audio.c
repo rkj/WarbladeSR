@@ -304,7 +304,7 @@ AudioHandle SampleLoad(const char *file, int maxVoices, int flags)
         s_error = ERR_MEM;
         return 0;
     }
-    audio = MIX_LoadAudio(s_mixer, file, true);
+    audio = MIX_LoadAudio(s_mixer, SysPath(file), true);
     if (audio == NULL) {
         s_error = ERR_FILEOPEN;
         return 0;
@@ -390,7 +390,7 @@ static AudioHandle LoadMusic(const char *file)
         s_error = ERR_MEM;
         return 0;
     }
-    audio = MIX_LoadAudio(s_mixer, file, false);
+    audio = MIX_LoadAudio(s_mixer, SysPath(file), false);
     if (audio == NULL) {
         s_error = ERR_FILEOPEN;
         return 0;
