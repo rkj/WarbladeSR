@@ -4,7 +4,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Warblade SR</title>
 <style>
   :root { --bg: #05060a; --panel: #10131c; --line: #2a3142; --text: #d8dde8; --dim: #8a93a6; --accent: #e8b43a; }
@@ -32,10 +32,32 @@
   #status { min-height: 1.5em; color: var(--text); }
   .small { font-size: 13px; }
   a { color: var(--accent); }
+  /* Touch controls (touch devices only, while playing): a stick bottom left, FIRE and ROCKET
+     bottom right, PAUSE top right. They feed the game's pad 0 (SysSetVirtualPad). */
+  #canvas, #touch * { touch-action: none; -webkit-user-select: none; user-select: none; }
+  #touch { position: fixed; inset: 0; pointer-events: none; }
+  #touch[hidden] { display: none; }
+  #touch > * { position: absolute; pointer-events: auto; border: 2px solid rgba(232, 180, 58, 0.55);
+               background: rgba(16, 19, 28, 0.35); color: rgba(232, 180, 58, 0.9);
+               font: 600 13px/1 system-ui, sans-serif; letter-spacing: 0.06em;
+               display: flex; align-items: center; justify-content: center; border-radius: 50%; }
+  #stick { left: 24px; bottom: 24px; width: 150px; height: 150px; }
+  #knob { width: 60px; height: 60px; border-radius: 50%; background: rgba(232, 180, 58, 0.45);
+          pointer-events: none; }
+  #fire { right: 24px; bottom: 40px; width: 96px; height: 96px; }
+  #rocket { right: 136px; bottom: 24px; width: 68px; height: 68px; }
+  #pause { right: 16px; top: 16px; width: 52px; height: 52px; font-size: 11px; }
+  #touch > .down { background: rgba(232, 180, 58, 0.45); color: #1a1405; }
 </style>
 </head>
 <body>
 <div id="stage"><canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas></div>
+<div id="touch" hidden>
+  <div id="stick"><div id="knob"></div></div>
+  <div id="rocket">ROCKET</div>
+  <div id="fire">FIRE</div>
+  <div id="pause">PAUSE</div>
+</div>
 
 <div id="panel">
   <div class="card">
@@ -51,7 +73,8 @@
       <button id="forget" hidden>Forget data</button>
     </div>
     <p class="small">Saves and profiles stay in this browser. Keys: arrows to move, left Ctrl to fire,
-       left Shift for rockets, P to pause, Esc for the menu.</p>
+       left Shift for rockets, P to pause, Esc for the menu. Gamepads: stick or d-pad, A to fire,
+       B or X for rockets, Start to pause. On touch screens, on-screen controls appear.</p>
   </div>
 </div>
 
@@ -209,8 +232,78 @@ async function loadFromServer(manifest) {
   showReady();
 }
 
+// ---- touch controls: the stick and buttons set bits of the game's pad 0 ----
+
+const PAD = { left: 1, right: 2, up: 4, down: 8, fire: 16, rocket: 32, pause: 64 };
+let padBits = 0, stickBits = 0;
+const buttonBits = new Map();   // pointerId -> bit held on a button
+
+function sendPad() {
+  let bits = stickBits;
+  for (const b of buttonBits.values()) bits |= b;
+  if (bits !== padBits) {
+    padBits = bits;
+    Module._SysSetVirtualPad(bits);
+  }
+}
+
+function setupTouch() {
+  const stick = $('stick'), knob = $('knob');
+  let stickPointer = null;
+  const moveStick = (e) => {
+    const r = stick.getBoundingClientRect();
+    const radius = r.width / 2;
+    let dx = e.clientX - (r.left + radius), dy = e.clientY - (r.top + radius);
+    const len = Math.hypot(dx, dy), max = radius - 30;
+    if (len > max) { dx *= max / len; dy *= max / len; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    const dead = radius * 0.3;
+    stickBits = (dx < -dead ? PAD.left : 0) | (dx > dead ? PAD.right : 0) |
+                (dy < -dead ? PAD.up : 0) | (dy > dead ? PAD.down : 0);
+    sendPad();
+  };
+  const releaseStick = () => {
+    stickPointer = null;
+    knob.style.transform = '';
+    stickBits = 0;
+    sendPad();
+  };
+  stick.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    stickPointer = e.pointerId;
+    stick.setPointerCapture(e.pointerId);
+    moveStick(e);
+  });
+  stick.addEventListener('pointermove', (e) => { if (e.pointerId === stickPointer) moveStick(e); });
+  stick.addEventListener('pointerup', releaseStick);
+  stick.addEventListener('pointercancel', releaseStick);
+
+  for (const [id, bit] of [['fire', PAD.fire], ['rocket', PAD.rocket], ['pause', PAD.pause]]) {
+    const el = $(id);
+    const release = (e) => { buttonBits.delete(e.pointerId); el.classList.remove('down'); sendPad(); };
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      el.setPointerCapture(e.pointerId);
+      buttonBits.set(e.pointerId, bit);
+      el.classList.add('down');
+      sendPad();
+    });
+    el.addEventListener('pointerup', release);
+    el.addEventListener('pointercancel', release);
+  }
+}
+
+// Shown on touch screens: right away where the main pointer is a finger, else on the first touch.
+function enableTouch() {
+  if (!$('touch').hidden) return;
+  setupTouch();
+  show('touch', true);
+}
+
 function start() {
   show('panel', false);
+  if (matchMedia('(pointer: coarse)').matches) enableTouch();
+  window.addEventListener('touchstart', enableTouch, { passive: true });
   FS.chdir('/');
   $('canvas').focus();
   // Saves are written to /save by the game; keep IndexedDB up to date. When the tab is hidden

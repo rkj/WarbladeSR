@@ -62,7 +62,7 @@ static void RecordFill(SDL_FRect rect, SDL_BlendMode blend, float r, float g, fl
 void SysInit(void)
 {
     SDL_SetAppMetadata("Warblade", "1.34 SR1", "as.warblade.warblade");
-    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK))
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD))
         SDL_Log("SDL_Init failed: %s", SDL_GetError());
 }
 
@@ -211,9 +211,18 @@ void SysSetFullscreen(const bool fullscreen)
     s_fullscreen = fullscreen;
 }
 
+static void PadAdded(SDL_JoystickID id);
+static void PadRemoved(SDL_JoystickID id);
+
 static void HandleEvent(const SDL_Event *e)
 {
     switch (e->type) {
+    case SDL_EVENT_GAMEPAD_ADDED:
+        PadAdded(e->gdevice.which);
+        break;
+    case SDL_EVENT_GAMEPAD_REMOVED:
+        PadRemoved(e->gdevice.which);
+        break;
     case SDL_EVENT_QUIT:
     case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
         s_quit = true;
@@ -1684,4 +1693,91 @@ bool JoyButton(char joy, long mask)
             buttons |= 1ul << i;
     }
     return (buttons & (unsigned long)mask) != 0;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Gamepads (sdlhelp.h): opened as they connect (SDL reports the ones present at start too).
+// ---------------------------------------------------------------------------------------------
+
+#define MAX_PADS 4
+#define PAD_STICK_DEAD 12000        // of 32767: how far the stick has to go to count as a direction
+#define PAD_TRIGGER_DOWN 16000      // of 32767: how far a trigger has to go to count as pressed
+
+static SDL_Gamepad *s_pads[MAX_PADS];
+static unsigned s_virtualPad;
+
+static void PadAdded(SDL_JoystickID id)
+{
+    int i;
+    for (i = 0; i < MAX_PADS; i++) {
+        if (s_pads[i] && SDL_GetGamepadID(s_pads[i]) == id)
+            return;
+    }
+    for (i = 0; i < MAX_PADS; i++) {
+        if (s_pads[i] == NULL) {
+            s_pads[i] = SDL_OpenGamepad(id);
+            if (s_pads[i] == NULL)
+                SDL_Log("SDL_OpenGamepad failed: %s", SDL_GetError());
+            else
+                SDL_Log("Gamepad %d: %s", i, SDL_GetGamepadName(s_pads[i]));
+            return;
+        }
+    }
+}
+
+static void PadRemoved(SDL_JoystickID id)
+{
+    int i;
+    for (i = 0; i < MAX_PADS; i++) {
+        if (s_pads[i] && SDL_GetGamepadID(s_pads[i]) == id) {
+            SDL_CloseGamepad(s_pads[i]);
+            s_pads[i] = NULL;
+        }
+    }
+}
+
+unsigned SysPadState(int pad)
+{
+    SDL_Gamepad *g;
+    unsigned bits;
+    int x, y;
+
+    if (pad < 0 || pad >= MAX_PADS)
+        return 0;
+    RefreshInput();
+    bits = pad == 0 ? s_virtualPad : 0;
+    g = s_pads[pad];
+    if (g == NULL)
+        return bits;
+
+    x = SDL_GetGamepadAxis(g, SDL_GAMEPAD_AXIS_LEFTX);
+    y = SDL_GetGamepadAxis(g, SDL_GAMEPAD_AXIS_LEFTY);
+    if (x < -PAD_STICK_DEAD || SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_DPAD_LEFT))
+        bits |= PAD_LEFT;
+    if (x > PAD_STICK_DEAD || SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_DPAD_RIGHT))
+        bits |= PAD_RIGHT;
+    if (y < -PAD_STICK_DEAD || SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_DPAD_UP))
+        bits |= PAD_UP;
+    if (y > PAD_STICK_DEAD || SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_DPAD_DOWN))
+        bits |= PAD_DOWN;
+    if (SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_SOUTH) ||
+        SDL_GetGamepadAxis(g, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > PAD_TRIGGER_DOWN)
+        bits |= PAD_FIRE;
+    if (SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_EAST) || SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_WEST) ||
+        SDL_GetGamepadAxis(g, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > PAD_TRIGGER_DOWN)
+        bits |= PAD_ROCKET;
+    if (SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_START))
+        bits |= PAD_PAUSE;
+    if (SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_BACK))
+        bits |= PAD_PROFILE;
+    return bits;
+}
+
+// Called by the browser page's touch controls (web/index.html).
+#ifdef __EMSCRIPTEN__
+EMSCRIPTEN_KEEPALIVE
+#endif
+void SysSetVirtualPad(unsigned bits)
+{
+    s_virtualPad = bits;
 }

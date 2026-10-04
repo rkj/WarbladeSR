@@ -225,6 +225,20 @@ long JoyX(char joy, char hat);            // hat 0: X axis, else Z; 0x7fff if no
 long JoyY(char joy, char hat);            // hat 0: Y axis, else R
 bool JoyButton(char joy, long mask);      // `mask` is a button bit mask
 
+// Gamepads through SDL's gamepad API (Xbox-style layout, whatever the brand), not part of the
+// original: pad n is the n-th one connected. Each reports the game's standard controls; the left
+// stick and the d-pad move. Pad 0 also includes the virtual pad (the browser page's touch
+// controls, SysSetVirtualPad).
+enum {
+    PAD_LEFT = 1, PAD_RIGHT = 2, PAD_UP = 4, PAD_DOWN = 8,
+    PAD_FIRE = 16,      // A (south), right trigger
+    PAD_ROCKET = 32,    // B (east), X (west), left trigger
+    PAD_PAUSE = 64,     // Start
+    PAD_PROFILE = 128   // Back / Select
+};
+unsigned SysPadState(int pad);            // PAD_* bits held now; 0 if there's no such pad
+void SysSetVirtualPad(unsigned bits);     // PAD_* bits held on the touch controls
+
 // ---------------------------------------------------------------------------------------------
 // Audio (src/core/sdl_audio.c, shaped like BASS). Handles are BASS-style: a sample, a voice
 // playing it, a tracker module or a stream; 0 is "none". A handle that has gone stale (a freed

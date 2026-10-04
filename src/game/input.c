@@ -4,6 +4,10 @@
 #include "globals.h"
 #include "game.h"
 
+// A keyboard player also takes the same control from their gamepad (pad p, SysPadState); pad 0
+// includes the browser page's touch controls. Not in the original.
+#define PAD(p, bit) ((SysPadState(p) & (bit)) != 0)
+
 
 // Finds the lowest (highest y) alive/active item within the horizontal play field and above
 // the current player, for auto-targeting; result in g_targetItemX/g_targetItemY, or (-1, -1)
@@ -232,7 +236,7 @@ int InputLeft(int p)
 
     if (g_save.players[p].inputDevice == DEVICE_KEYBOARD) {
         g_joystickSpeedMul = 1.0f;
-        if (KeyDown((enum EKeyboardLayout)g_cfg.left[p]) == true)
+        if (KeyDown((enum EKeyboardLayout)g_cfg.left[p]) == true || PAD(p, PAD_LEFT))
             return 1;
         else
             return 0;
@@ -302,7 +306,7 @@ int InputRight(int p)
     }
 
     if (g_save.players[p].inputDevice == DEVICE_KEYBOARD) {
-        if (KeyDown((enum EKeyboardLayout)g_cfg.right[p]) == true)
+        if (KeyDown((enum EKeyboardLayout)g_cfg.right[p]) == true || PAD(p, PAD_RIGHT))
             return 1;
         else
             return 0;
@@ -340,7 +344,7 @@ int InputDown(int p)
     if (g_autoplay && RandRange(0, 100) < 50)
         return 1;
     if (g_save.players[p].inputDevice == DEVICE_KEYBOARD) {
-        if (KeyDown((enum EKeyboardLayout)g_cfg.down[p]) == true)
+        if (KeyDown((enum EKeyboardLayout)g_cfg.down[p]) == true || PAD(p, PAD_DOWN))
             return 1;
         else
             return 0;
@@ -375,7 +379,7 @@ int InputUp(int p)
     }
 
     if (g_save.players[p].inputDevice == DEVICE_KEYBOARD) {
-        if (KeyDown((enum EKeyboardLayout)g_cfg.up[p]) == true)
+        if (KeyDown((enum EKeyboardLayout)g_cfg.up[p]) == true || PAD(p, PAD_UP))
             return 1;
         else
             return 0;
@@ -425,7 +429,7 @@ int InputFire(int p)
     }
 
     if (g_save.players[p].inputDevice == DEVICE_KEYBOARD) {
-        if (KeyDown((enum EKeyboardLayout)g_cfg.fire[p]) == true)
+        if (KeyDown((enum EKeyboardLayout)g_cfg.fire[p]) == true || PAD(p, PAD_FIRE))
             return 1;
         else
             return 0;
@@ -457,7 +461,7 @@ int InputRocket(int p)
     }
 
     if (g_save.players[p].inputDevice == DEVICE_KEYBOARD) {
-        if (KeyDown((enum EKeyboardLayout)g_cfg.rocket[p]) == true)
+        if (KeyDown((enum EKeyboardLayout)g_cfg.rocket[p]) == true || PAD(p, PAD_ROCKET))
             return 1;
         else
             return 0;
@@ -483,7 +487,7 @@ int InputRocket(int p)
 int InputPause(int p)
 {
     if (g_save.players[p].inputDevice == DEVICE_KEYBOARD) {
-        if (KeyDown((enum EKeyboardLayout)g_cfg.pause[p]) == true)
+        if (KeyDown((enum EKeyboardLayout)g_cfg.pause[p]) == true || PAD(p, PAD_PAUSE))
             return 1;
         else
             return 0;
@@ -507,7 +511,7 @@ int InputPause(int p)
 int InputProfile(int p)
 {
     if (g_save.players[p].inputDevice == DEVICE_KEYBOARD) {
-        if (KeyDown((enum EKeyboardLayout)g_cfg.profile[p]) == true)
+        if (KeyDown((enum EKeyboardLayout)g_cfg.profile[p]) == true || PAD(p, PAD_PROFILE))
             return 1;
         else
             return 0;
@@ -534,7 +538,7 @@ int InputMenuFire(int p)
     if (g_autoplay && g_autoplayCanFire && RandRange(0, 100) < 90)
         return 1;
     if (g_cfg.device[p] == DEVICE_KEYBOARD) {
-        if (KeyDown((enum EKeyboardLayout)g_cfg.fire[p]) == true)
+        if (KeyDown((enum EKeyboardLayout)g_cfg.fire[p]) == true || PAD(p, PAD_FIRE))
             return 1;
         else
             return 0;
