@@ -25,10 +25,10 @@ enum {
 // Copies a file, overwriting `to` (the original used Win32 CopyFileA with bFailIfExists = 0).
 static bool CopyProfileFile(const char *from, const char *to)
 {
-    FILE *in = fopen(from, "rb");
+    FILE *in = fopen(SysPath(from), "rb");
     if (!in)
         return false;
-    FILE *out = fopen(to, "wb");
+    FILE *out = fopen(SysPath(to), "wb");
     if (!out) {
         fclose(in);
         return false;

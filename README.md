@@ -108,6 +108,22 @@ build.bat
   link to your installation's `data\` folder.
 - `run.bat [release|debug|asan]` starts that build from its folder.
 
+### Linux
+
+The `sdl` branch also builds natively on Linux with GCC or Clang. You still need the data from a Warblade 1.34 installation (its `data/` folder).
+
+```sh
+sudo apt install build-essential cmake ninja-build git zlib1g-dev \
+    libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxss-dev libxfixes-dev \
+    libxtst-dev libasound2-dev libpulse-dev libgl-dev libegl-dev
+WARBLADE_GAME_DIR=/path/to/Warblade ./build-linux.sh
+cd build/linux-release && ./warblade
+```
+
+- `build-linux.sh` builds SDL3, SDL3_image and SDL3_mixer from source into `build/deps` the first time (statically, with the same features as the Windows build), then the game into `build/linux-release` (`build-linux.sh debug`: `build/linux-debug`), with a `data/` link to your installation's.
+- Profiles, settings and screenshots go to `~/Documents/warblade` (or `~/warblade` when there is no `Documents` folder).
+- The game's Windows paths are translated on the fly (`SysPath` in `src/core/sdl.c`): backslashes become slashes, and file names match regardless of case, as they did on Windows. The Microsoft C runtime calls it uses map onto POSIX in `include/posix/io.h`.
+
 
 # Used libraries
 

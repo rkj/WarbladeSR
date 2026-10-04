@@ -983,7 +983,11 @@ int PackLevelData(int slot, int level, short mode)
     buf = calloc(LEVEL_RAW_SIZE, 1);
     usize = LEVEL_RAW_SIZE;
     csize = LEVEL_RAW_SIZE;
-    res = compress((unsigned char *)buf,(unsigned long *)&csize,(const unsigned char *)&g_levelRaw, usize);
+    {
+        uLongf packed = (uLongf)csize;   // zlib's sizes are `unsigned long`
+        res = compress((unsigned char *)buf, &packed, (const unsigned char *)&g_levelRaw, usize);
+        csize = (int)packed;
+    }
     buf2 = calloc(csize, 1);
     memcpy(buf2, buf, csize);
     g_alienGfxSlots[slot].src = buf2;
