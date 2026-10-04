@@ -58,8 +58,13 @@ else()
     target_link_libraries(warblade PRIVATE m)
     # globals.c lists the globals in the original's address order, which MSVC keeps with its
     # bss_seg/data_seg pragmas; keep the same order here in case code still reaches across
-    # from one global into the next, as the original binary could.
-    set_source_files_properties(src/data/globals.c PROPERTIES COMPILE_OPTIONS -fno-toplevel-reorder)
+    # from one global into the next, as the original binary could. GCC needs telling; Clang
+    # (no such flag) emits globals in definition order anyway.
+    include(CheckCCompilerFlag)
+    check_c_compiler_flag(-fno-toplevel-reorder HAVE_NO_TOPLEVEL_REORDER)
+    if(HAVE_NO_TOPLEVEL_REORDER)
+        set_source_files_properties(src/data/globals.c PROPERTIES COMPILE_OPTIONS -fno-toplevel-reorder)
+    endif()
 endif()
 
 if(WARBLADE_ASAN AND MSVC)
