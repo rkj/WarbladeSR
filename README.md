@@ -139,6 +139,27 @@ python3 -m http.server -d build/web 8000     # then open http://localhost:8000
 - Saves, profiles and settings live in the browser too (`/save`, kept in IndexedDB). The page saves the settings every few seconds and when the tab is hidden, since players close the tab rather than quit.
 - It starts inside the page; `W` (or the settings page) switches to fullscreen. Frame interpolation is off in the browser.
 
+### Docker
+
+The browser version can also be served from a Docker image, with the game data and the saves on the server: players just open the page, and their profiles, saves, settings and high scores live in a volume. The image has no game data; you mount your own.
+
+```sh
+docker build -t warblade-sr .
+docker run -d -p 8080:8080 \
+    -v /path/to/Warblade/data:/data:ro \
+    -v warblade-saves:/saves \
+    -e WARBLADE_PASSWORD=choose-one \
+    warblade-sr
+```
+
+Then open http://localhost:8080 (user `warblade`, the password you chose). `docker-compose.yml` does the same with `docker compose up -d`.
+
+- `/data`: your Warblade 1.34 `data` folder (with `warblade.pac`, `music`, `samples`), read-only. Mounting the whole installation folder works too.
+- `/saves`: the game's user folder. The page loads it into the game, and every few seconds (and when the tab is hidden) sends back the files the game changed, so saves follow you between browsers and devices.
+- `WARBLADE_PASSWORD` turns on HTTP basic auth (user `WARBLADE_USER`, default `warblade`) for everything but `/healthz`. Set it before putting the server on the internet: the server hands out the game data to anyone who can reach it.
+- The saves are shared by everyone using the server, like one PC: players get their own profiles in the game's profile menu. Two people playing at the same time can overwrite each other's settings file.
+- The server is `docker/server.py` (Python standard library). The build stage runs `build-web.sh` in the official Emscripten image.
+
 
 # Used libraries
 

@@ -40,7 +40,7 @@
 <div id="panel">
   <div class="card">
     <h1>WARBLADE SR</h1>
-    <p>Warblade 1.34 by Edgar M. Vigdal, running in your browser. This page has no game data:
+    <p id="intro">Warblade 1.34 by Edgar M. Vigdal, running in your browser. This page has no game data:
        choose your own Warblade 1.34 folder (or its <code>data</code> folder). It is read on this
        computer only, and kept in this browser so you only choose it once.</p>
     <p id="status">Loading…</p>
@@ -59,6 +59,12 @@
 'use strict';
 const $ = (id) => document.getElementById(id);
 const DATA = '/data';   // the game looks for data/ in its own folder, / here
+const SAVE = '/save';   // the game's user folder in the browser (SysUserFolder)
+
+// Server mode: the page is served by the Docker image (docker/server.py), which has the data
+// and keeps the saves. Otherwise the player chooses a local folder and it all stays in
+// IndexedDB.
+let server = false;
 
 function setStatus(text) { $('status').textContent = text; }
 function show(id, on) { $(id).hidden = !on; }
@@ -89,8 +95,8 @@ function removeTree(path) {
 }
 
 function showReady() {
-  setStatus('Your Warblade data is loaded.');
-  show('pick', false); show('play', true); show('forget', true);
+  setStatus(server ? 'Ready. Saves are kept on this server.' : 'Your Warblade data is loaded.');
+  show('pick', false); show('play', true); show('forget', !server);
   $('play').focus();
 }
 
@@ -124,19 +130,99 @@ async function loadFolder(files) {
   showReady();
 }
 
+// ---- server mode ----
+
+const urlPath = (p) => p.split('/').map(encodeURIComponent).join('/');
+
+async function fetchJson(url) {
+  try {
+    const res = await fetch(url, { cache: 'no-store' });
+    return res.ok ? await res.json() : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Downloads `files` (paths relative to `base`) into the folder `dest`, a few at a time.
+async function download(base, files, dest, label) {
+  let next = 0, done = 0;
+  const worker = async () => {
+    while (next < files.length) {
+      const f = files[next++];
+      const res = await fetch(base + urlPath(f.path));
+      if (!res.ok) throw new Error(f.path + ': HTTP ' + res.status);
+      const path = dest + '/' + f.path;
+      mkdirs(path.slice(0, path.lastIndexOf('/')));
+      FS.writeFile(path, new Uint8Array(await res.arrayBuffer()));
+      if (++done % 10 === 0 || done === files.length) setStatus(label + ' ' + done + ' / ' + files.length + '…');
+    }
+  };
+  await Promise.all(Array.from({ length: 6 }, worker));
+}
+
+// What's in SAVE: path -> "mtime:size", to find what the game changed since the last push.
+let pushed = new Map();
+function scanSaves(dir = SAVE, out = new Map()) {
+  for (const name of FS.readdir(dir)) {
+    if (name === '.' || name === '..') continue;
+    const p = dir + '/' + name, st = FS.stat(p);
+    if (FS.isDir(st.mode)) scanSaves(p, out);
+    else out.set(p.slice(SAVE.length + 1), st.mtime.getTime() + ':' + st.size);
+  }
+  return out;
+}
+
+let pushing = false;
+async function pushSaves(keepalive) {
+  if (pushing) return;
+  pushing = true;
+  try {
+    const now = scanSaves();
+    for (const [path, sig] of now) {
+      if (pushed.get(path) === sig) continue;
+      const res = await fetch('saves/' + urlPath(path),
+        { method: 'PUT', body: FS.readFile(SAVE + '/' + path), keepalive });
+      if (res.ok) pushed.set(path, sig);
+    }
+    for (const path of Array.from(pushed.keys())) {
+      if (now.has(path)) continue;
+      const res = await fetch('saves/' + urlPath(path), { method: 'DELETE', keepalive });
+      if (res.ok) pushed.delete(path);
+    }
+  } catch (e) {
+    console.warn('Could not save to the server', e);
+  } finally {
+    pushing = false;
+  }
+}
+
+async function loadFromServer(manifest) {
+  server = true;
+  $('intro').textContent = 'Warblade 1.34 by Edgar M. Vigdal, running in your browser, ' +
+    'with the game data and saves on this server.';
+  mkdirs(DATA);
+  mkdirs(SAVE);
+  await download('data/', manifest.files, DATA, 'Loading game data');
+  const saves = await fetchJson('api/saves');
+  if (saves) await download('saves/', saves.files, SAVE, 'Loading saves');
+  pushed = scanSaves();
+  showReady();
+}
+
 function start() {
   show('panel', false);
   FS.chdir('/');
   $('canvas').focus();
   // Saves are written to /save by the game; keep IndexedDB up to date. When the tab is hidden
   // or closed, have the game write its settings first (it otherwise does so only on quit).
-  const save = () => {
+  const save = (closing) => {
     try { Module._WebSaveSettings(); } catch (e) { console.warn('WebSaveSettings', e); }
-    sync(false).catch(() => {});
+    if (server) pushSaves(closing === true);
+    else sync(false).catch(() => {});
   };
   setInterval(save, 5000);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
-  window.addEventListener('pagehide', save);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(true); });
+  window.addEventListener('pagehide', () => save(true));
   Module.callMain([]);
 }
 
@@ -145,7 +231,7 @@ var Module = {
   print: (t) => console.log(t),
   printErr: (t) => console.warn(t),
   onExit: () => {
-    sync(false).catch(() => {});
+    if (server) pushSaves(true); else sync(false).catch(() => {});
     show('panel', true);
     setStatus('Warblade has closed. Reload the page to play again.');
     show('pick', false); show('play', false); show('forget', false);
@@ -155,6 +241,11 @@ var Module = {
     setStatus('Warblade stopped with an error: ' + what);
   },
   onRuntimeInitialized: async () => {
+    const manifest = await fetchJson('api/data');
+    if (manifest) {
+      loadFromServer(manifest).catch((err) => setStatus('Could not load the game data: ' + err));
+      return;
+    }
     const IDBFS = FS.filesystems.IDBFS;
     mkdirs(DATA); FS.mount(IDBFS, {}, DATA);
     mkdirs('/save'); FS.mount(IDBFS, {}, '/save');

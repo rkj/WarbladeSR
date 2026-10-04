@@ -1,0 +1,4 @@
+# Keep the build context to the sources (build-web.sh fetches its dependencies itself).
+.git
+build
+game
