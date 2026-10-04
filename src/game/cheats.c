@@ -173,7 +173,8 @@ void CheatHotkeys()
         }
     }
 
-    // ---- number keys ----
-    if (digit != 0 && g_cheatsOn && g_state == STATE_PLAYING && PL.dead == 0)
+    // ---- number keys: god mode toggles any time (respawning, "get ready"), the others need
+    //      normal play and the ship alive ----
+    if (digit != 0 && g_cheatsOn && (digit == 9 || (g_state == STATE_PLAYING && PL.dead == 0)))
         ApplyCheat(digit);
 }
