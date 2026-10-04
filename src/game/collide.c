@@ -143,6 +143,7 @@ void BulletsVsPlayer()
 
     if (g_save.players[g_curPlayer].dead == 0
         && g_save.players[g_curPlayer].shieldTimer == 0
+        && !g_cheatGodMode
         && g_save.players[g_curPlayer].lives > g_shipDefs[g_save.players[g_curPlayer].ship]->minEnergy) {
         if (g_save.players[g_curPlayer].mirrorTime != 0) {
             if (Rand1ff() < 0x100)

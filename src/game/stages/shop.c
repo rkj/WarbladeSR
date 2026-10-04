@@ -722,7 +722,8 @@ void Shop()
         } else
             g_keyLatch[K_VK_F1] = 1;
 
-        // F2: delete the current profile and return to the title screen.
+        // F2: save the game, forget the auto-login profile (setpro.dat) and return to the
+        // title screen. The profile and its save are kept.
         if (KeyDown(K_VK_F2) && g_secretShown == 0 && (int)g_shopTransition == 500) {
             if (g_keyLatch[K_VK_F2]) {
                 g_keyLatch[K_VK_F2] = 0;

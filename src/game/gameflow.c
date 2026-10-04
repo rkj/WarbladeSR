@@ -268,12 +268,15 @@ void PauseGame()
 // (+Shift to reverse) adjust spark/star counts, F toggles flare particles (+Alt+Shift:
 // FPS display), I cycles bullet-render intensity, Z toggles point/flare stars, W toggles
 // fullscreen, S cycles interpolation, Alt+V toggles vsync, M cycles the music format, U toggles voice on/off, and PageUp/Down, +/-,
-// Home/End adjust the sfx/music/voice volumes.
+// Home/End adjust the sfx/music/voice volumes. The cheat code and its number keys are
+// handled by CheatHotkeys (cheats.c).
 void Hotkeys()
 {
     int voice;
     int tries;
     unsigned char done;
+
+    CheatHotkeys();
 
     // ---- F6: restart music ----
     if (KeyDown(K_VK_F6) == true) {
