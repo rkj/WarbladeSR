@@ -11,6 +11,9 @@
 #include <string.h>
 #include <SDL3/SDL.h>
 #include <SDL3_mixer/SDL_mixer.h>
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 #include "sdlhelp.h"
 
 void AudioTick(void);
@@ -259,7 +262,15 @@ void AudioShutdown(void)
 }
 
 int  AudioError(void)  { return s_error; }
-void AudioUpdate(void) { AudioTick(); }
+// Only called from the game's busy-waits (e.g. while a jingle plays out); in a browser those
+// must also let the page run.
+void AudioUpdate(void)
+{
+    AudioTick();
+#ifdef __EMSCRIPTEN__
+    emscripten_sleep(1);
+#endif
+}
 
 void AudioStart(void)
 {

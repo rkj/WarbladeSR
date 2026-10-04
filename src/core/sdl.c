@@ -22,6 +22,9 @@
 #endif
 #include <SDL3/SDL.h>
 #include <SDL3_image/SDL_image.h>
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 #include "sdlhelp.h"
 
 // Audio slides that need the game thread (sdl_audio.c).
@@ -108,8 +111,15 @@ static void CanvasToWindow(float cx, float cy, float *wx, float *wy)
 
 bool SysCreateWindow(int w, int h, bool windowed, const char *title, const char *renderDriver)
 {
-    SDL_WindowFlags flags = windowed ? SDL_WINDOW_RESIZABLE : SDL_WINDOW_RESIZABLE | SDL_WINDOW_FULLSCREEN;
+    SDL_WindowFlags flags;
     bool ok;
+
+#ifdef __EMSCRIPTEN__
+    // A page can only go fullscreen from a click or key press: start in the page (W and the
+    // settings page still switch).
+    windowed = true;
+#endif
+    flags = windowed ? SDL_WINDOW_RESIZABLE : SDL_WINDOW_RESIZABLE | SDL_WINDOW_FULLSCREEN;
 
     SysDestroyWindow();
     SDL_SetHint(SDL_HINT_RENDER_DRIVER, renderDriver);     // NULL clears it
@@ -253,6 +263,10 @@ static bool WantInterpolation(void)
 {
     float hz;
 
+#ifdef __EMSCRIPTEN__
+    return false;   // the browser paces the page; frames are shown as they are made
+#endif
+
     if (s_frameMs == 0 || s_base == NULL || s_interpMode == SYS_INTERP_OFF)
         return false;
     if (s_interpMode == SYS_INTERP_ON)
@@ -287,6 +301,10 @@ static void FlipPlain(void)
     now = SDL_GetTicksNS();
     if (frameNs && now - s_lastFlipNs < frameNs)
         SDL_DelayPrecise(frameNs - (now - s_lastFlipNs));
+#ifdef __EMSCRIPTEN__
+    else
+        emscripten_sleep(0);   // the browser shows the frame (and runs events) only once we yield
+#endif
 
     WaitForFocus();
     s_lastFlipNs = SDL_GetTicksNS();
@@ -504,7 +522,10 @@ const char *SysUserFolder(void)
     static char folder[1024];
     if (folder[0] == 0) {
         const char *docs = SDL_GetUserFolder(SDL_FOLDER_DOCUMENTS);
-#ifndef _WIN32
+#ifdef __EMSCRIPTEN__
+        // The page keeps this folder in IndexedDB (web/index.html).
+        docs = "/save";
+#elif !defined(_WIN32)
         // Not every Linux home has a Documents folder.
         if (docs == NULL || !SDL_GetPathInfo(docs, NULL))
             docs = SDL_GetUserFolder(SDL_FOLDER_HOME);

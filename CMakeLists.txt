@@ -71,6 +71,19 @@ else()
     set_source_files_properties(src/data/globals.c PROPERTIES COMPILE_OPTIONS "${_globals_options}")
 endif()
 
+if(EMSCRIPTEN)
+    # The browser build (README.md, "Browser"): warblade.js/.wasm plus web/index.html, which
+    # loads the player's own data/ into the virtual file system and starts the game.
+    # Asyncify lets the game keep its blocking main loop: SysFlip and AudioUpdate yield.
+    set_target_properties(warblade PROPERTIES SUFFIX ".js")
+    target_link_options(warblade PRIVATE
+        -sASYNCIFY -sASYNCIFY_STACK_SIZE=131072 -sSTACK_SIZE=4MB
+        -sALLOW_MEMORY_GROWTH -sINITIAL_MEMORY=256MB
+        -sINVOKE_RUN=0 -sEXIT_RUNTIME=1 -sFORCE_FILESYSTEM -lidbfs.js
+        "-sEXPORTED_RUNTIME_METHODS=['FS','callMain']")
+    configure_file(web/index.html "${CMAKE_BINARY_DIR}/index.html" COPYONLY)
+endif()
+
 if(WARBLADE_ASAN AND MSVC)
     # /RTC (in CMake's Debug flags) and ASan don't mix
     foreach(v CMAKE_C_FLAGS_DEBUG)

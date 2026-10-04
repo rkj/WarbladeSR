@@ -633,6 +633,17 @@ void OnFocusChange(bool focused)
     }
 }
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+// The browser page calls this when it's hidden or closed (web/index.html): players close the
+// tab rather than quit, so save the settings then, as the in-game hotkeys do.
+EMSCRIPTEN_KEEPALIVE void WebSaveSettings(void)
+{
+    MergeSettings(g_profileIndex);
+    WriteSettings();
+}
+#endif
+
 #ifndef _MSC_VER
 // Other compilers have no /alternatename: a plain main.
 int main(void)
