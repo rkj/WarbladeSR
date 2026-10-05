@@ -52,15 +52,23 @@ static bool CopyProfileFile(const char *from, const char *to)
 // Opens the "quit current game?" confirmation window.
 void QuitGameDialog()
 {
+#ifdef __EMSCRIPTEN__
+    int h = 120;    // no QUIT TO WINDOWS in the browser
+#else
     int h = 140;
+#endif
     int w = 200;
     g_curWin = WinOpen(POS_CENTERED, POS_CENTERED, w, h, WIN_MODE_SLIDING);
     g_quitGameWin = g_curWin;
     WinAddText(POS_CENTERED, 20, g_curWin, "QUIT GAME?", 4);
     WinAddMenuItem(POS_CENTERED, 40, g_curWin, MENUID_QUIT_GAME_CONFIRM, "QUIT CURRENT GAME", 3);
     WinAddMenuItem(POS_CENTERED, 60, g_curWin, MENUID_RETIRE_CONFIRM, "RETIRE FROM  GAME", 3);
+#ifdef __EMSCRIPTEN__
+    WinAddMenuItem(POS_CENTERED, 80, g_curWin, MENUID_QUIT_GAME_CONTINUE, "  CONTINUE GAME  ", 3);
+#else
     WinAddMenuItem(POS_CENTERED, 80, g_curWin, MENUID_QUIT_GAME_TO_WINDOWS, " QUIT TO WINDOWS ", 3);
     WinAddMenuItem(POS_CENTERED, 100, g_curWin, MENUID_QUIT_GAME_CONTINUE, "  CONTINUE GAME  ", 3);
+#endif
     WinSetSelected(g_curWin, MENUID_QUIT_GAME_CONFIRM);
     WinCheckMenuItem(g_curWin, MENUID_QUIT_GAME_CONFIRM);
 }
@@ -265,10 +273,15 @@ void InitMenu()
     AddMenuText(g_lastRight + 2, g_lastTop, "USER PROFILES", 0, MENUID_USER_PROFILES, -1, 0, 1);
     AddMenuText(g_lastRight + 2, g_lastTop, "USER MANUAL", 0, MENUID_USER_MANUAL, -1, 0, 1);
 
-    // Top-level: QUIT (+ its YES confirm submenu).
+    // Top-level: QUIT (+ its YES confirm submenu). A browser tab is closed, not quit: the web
+    // build leaves it out, numbering the items after it as if it were there.
+#ifdef __EMSCRIPTEN__
+    g_nextId = MENUID_QUIT_YES + 1;
+#else
     AddMenuText(g_screenW - 50, g_screenH - 18, "QUIT", 0, g_nextId, -1, 0, 3);
     y = g_nextId - 1;
     AddMenuText(g_lastLeft, g_lastTop - 15, "YES ", 0, MENUID_QUIT_YES, y, 0, 3);
+#endif
 
     // Settings-page items (arrows/toggles), laid out top to bottom at a fixed column.
     x = 0x26c;
@@ -2850,9 +2863,11 @@ void MenuHandler()
         if (g_keyLatch[K_VK_ESCAPE] != 0) {
             g_keyLatch[K_VK_ESCAPE] = 0;
             if (!AnyWindowHasEdit() && !AnyWindowActive()) {
+#ifndef __EMSCRIPTEN__      // the browser build has no quitting
                 g_quitToWindowsWinOpen = true;
                 g_buttonsOn = 1;
                 QuitToWindowsDialog();
+#endif
             } else {
                 WinCloseAll();
                 g_profileWinOpen = false;

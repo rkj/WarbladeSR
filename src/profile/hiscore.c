@@ -78,6 +78,14 @@ void ShowHiscoreTable()
 {
     int idx;
 
+#ifdef __EMSCRIPTEN__
+    // The browser build saves at every shop (AutoSaveProfile); a run that ended in a game over
+    // must not be continued from its last shop, as the original, which used up a save when
+    // loading it, never allowed. Quitting with lives left keeps the save.
+    if (g_profileIndex != -1 && IsGameOver())
+        DeleteProfile(g_profileIndex);
+#endif
+
     SysSetMaxFps(60);
     g_introInit = 1;
     g_bgIndex = 1;
