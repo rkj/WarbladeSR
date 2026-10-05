@@ -714,6 +714,9 @@ TEST(Play_Pickup_gem_adds_a_gem_and_1000_points)
 TEST(Play_Pickup_every_100th_gem_starts_the_gem_drop)
 {
     StartPlay();
+    PL0.gems = 452 + 49 * 8;   // the 50th gem is no drop
+    Pickup(ITEM_GEM);
+    CHECK_EQ_INT(g_state, STATE_PLAYING);
     PL0.gems = 452 + 98 * 8;
     Pickup(ITEM_GEM);
     CHECK_EQ_INT(g_state, STATE_PLAYING);
@@ -791,6 +794,9 @@ TEST(Play_Pickup_rank_gems_out_of_order_break_the_sequence)
 TEST(Play_Pickup_rank_gems_6_to_1_add_500_levels)
 {
     StartPlay();
+    Pickup(ITEM_RANK_GEM_1);   // out of sequence: nothing
+    CHECK(strcmp(g_alertMsg, "*** 500 LEVELS ADDED ***") != 0);
+    CHECK_EQ_INT(PL0.bulkLevelsCooldown, 0);
     Pickup(ITEM_RANK_GEM_6);
     CHECK_EQ_INT(PL0.gemSeqA, 0x20);
     Pickup(ITEM_RANK_GEM_5);
@@ -1179,8 +1185,11 @@ TEST(Play_SpawnPowerup_rolls_40_27_20_13_percent_money)
 TEST(Play_SpawnBonus_rolls_a_weighted_type)
 {
     StartPlay();
-    for (int k = 0; k < NUM_BONUS_WEIGHTS; k++)
+    for (int k = 0; k < NUM_BONUS_WEIGHTS; k++) {
         g_bonusWeight[k] = 0;
+        g_itemBonusSrcX[k] = 1000 + k;   // distinct graphics per type
+        g_itemBonusSrcY[k] = 2000 + k;
+    }
     g_bonusWeight[ITEM_SCOOP] = 3;
     SpawnBonus(200, 100);
     CHECK_EQ_INT(g_items[0].alive, 1);
@@ -1196,6 +1205,8 @@ TEST(Play_SpawnBonus_rolls_a_weighted_type)
         g_items[0].alive = 0;
         SpawnBonus(200, 100);
         CHECK(g_items[0].type == ITEM_MIRROR || g_items[0].type == ITEM_FREEZE);
+        CHECK_EQ_INT(g_items[0].srcX, 1000 + g_items[0].type);
+        CHECK_EQ_INT(g_items[0].srcY, 2000 + g_items[0].type);
         got[g_items[0].type == ITEM_MIRROR]++;
     }
     CHECK(got[0] > 0 && got[1] > 0);

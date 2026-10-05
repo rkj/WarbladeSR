@@ -2134,12 +2134,12 @@ file: src/game/enemies.c
 +             if (d < 20)
 expect: Flow_NearPlayerFireBoost_cuts_values_near_the_player
 
-== flow: fire boost reach 60 px
+== flow: fire boost half cut reaches 45 px
 file: src/game/enemies.c
--     if (d < 50) {
--         q = val / 4;
-+     if (d < 60) {
-+         q = val / 4;
+-             if (d < 30)
+-                 return val -= q * 2;
++             if (d < 45)
++                 return val -= q * 2;
 expect: Flow_NearPlayerFireBoost_cuts_values_near_the_player
 
 # ---- hurryup.c ----

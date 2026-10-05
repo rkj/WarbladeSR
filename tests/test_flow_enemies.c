@@ -490,10 +490,17 @@ TEST(Flow_SpawnMoneySucker_not_for_poor_players_or_on_boss_levels)
     Setup(LEVEL_WAVE);
     g_frameDt = 100;
     g_time = 300000;
+    // Just above 750, enough rolls spawn one (about 6 in 40000 per call); at 750, never.
     g_save.players[0].money = 750;
-    for (int i = 0; i < 100; i++)
+    for (int i = 0; i < 200000; i++)
         SpawnMoneySucker();
     CHECK_EQ_INT(g_enemies[0][0].active, 0);
+    g_save.players[0].money = 751;
+    for (int i = 0; i < 200000 && !g_enemies[0][0].active; i++)
+        SpawnMoneySucker();
+    CHECK_EQ_INT(g_enemies[0][0].active, 1);
+    memset(g_enemies, 0, sizeof g_enemies);
+    g_moneySuckerCooldown = 0;
     g_save.players[0].money = 2000000000;
     g_curLevelData.type = LEVEL_BOSS;
     SpawnMoneySucker();

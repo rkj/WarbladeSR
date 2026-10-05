@@ -156,10 +156,16 @@ def main():
     ap.add_argument("-j", type=int, default=max(1, (os.cpu_count() or 2) // 2))
     ap.add_argument("-k", action="append", help="only mutations whose name contains this")
     ap.add_argument("--list", action="store_true")
+    ap.add_argument("--skip-killed", metavar="LOG",
+                    help="skip the mutations an earlier run's output (LOG) reports killed")
     args = ap.parse_args()
     muts = parse()
     if args.k:
         muts = [m for m in muts if any(k in m.name for k in args.k)]
+    if args.skip_killed:
+        with open(args.skip_killed) as f:
+            done = set(re.findall(r"^ok +killed +(.+?)(?:  \[|$)", f.read(), re.M))
+        muts = [m for m in muts if m.name not in done]
     if args.list:
         for m in muts:
             print(f"{m.name}  ({m.where})")
