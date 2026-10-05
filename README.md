@@ -33,6 +33,7 @@ I intentionally didn't want to change too much about the game without good reaso
 - Anti-cheat mechanisms (such as obfuscating score tables by multiplying them by 7, reading the process list for trainer executables, intentionally crashing the game upon finding tampered highscores) have been removed
 - Asset loading during startup has been significantly sped up by detatching it from the framerate
 - Intro sequence now handles window closing instead of only closing when it reaches the main menu
+- Gamepads work (not part of the original game): left stick or d-pad to move, A or right trigger to fire, B, X or left trigger for rockets, Start to pause, Back for the profile key. Controllers with a standard layout (Xbox, PlayStation, Switch Pro, and Steam controllers through Steam Input) are picked up automatically: the first pad plays player 1, the second player 2
 
 #### Cheats
 
@@ -155,6 +156,7 @@ python3 -m http.server -d build/web 8000     # then open http://localhost:8000
 - `build-web.sh` builds zlib, SDL3, SDL3_image and SDL3_mixer for WebAssembly into `build/deps-web` the first time, then the game into `build/web` (`index.html`, `warblade.js`, `warblade.wasm`). The page (`web/index.html`) has to be served over HTTP; opening the file directly won't load the WebAssembly.
 - The game keeps its blocking main loop thanks to Asyncify: `SysFlip` and `AudioUpdate` yield to the browser.
 - Saves, profiles and settings live in the browser too (`/save`, kept in IndexedDB). The page saves the settings every few seconds and when the tab is hidden, since players close the tab rather than quit.
+- Touch screens get an on-screen stick with FIRE, ROCKET and PAUSE buttons (shown on phones and tablets, or on a laptop's first touch). Gamepads work in the browser too, once you press a button on them.
 - It starts inside the page; `W` (or the settings page) switches to fullscreen. Frame interpolation is off in the browser.
 
 ### Docker
