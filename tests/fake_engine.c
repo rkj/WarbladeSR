@@ -52,7 +52,10 @@ void FakeReset(void)
     g_fake.vsync = true;
     g_fake.maxFps = 60;
     if (!g_fake.userFolder[0]) {
-        char tmpl[] = "/tmp/wbtest-XXXXXX";
+        // under TMPDIR, which the runner points at a folder it deletes afterwards
+        char tmpl[512];
+        const char *tmp = getenv("TMPDIR");
+        snprintf(tmpl, sizeof tmpl, "%s/wbtest-XXXXXX", tmp && *tmp ? tmp : "/tmp");
         const char *dir = mkdtemp(tmpl);
         snprintf(g_fake.userFolder, sizeof g_fake.userFolder, "%s", dir ? dir : "/tmp");
     }

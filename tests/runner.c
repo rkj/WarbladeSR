@@ -4,12 +4,15 @@
 //
 // PATTERNs select tests whose name contains any of them; -l lists the tests, -v shows each
 // test's output even when it passes, -j runs N tests at a time. Exits 1 if any test fails.
+#define _XOPEN_SOURCE 700
+#define _DEFAULT_SOURCE
 #include <stdarg.h>
 #include <stdlib.h>
 #include <signal.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/wait.h>
+#include <ftw.h>
 #include "test.h"
 
 enum { MAX_TESTS = 4096, TIME_LIMIT_S = 20 };
@@ -99,6 +102,21 @@ static void Dump(FILE *f)
         fwrite(buf, 1, n, stdout);
 }
 
+static int RemoveEntry(const char *path, const struct stat *st, int flag, struct FTW *ftw)
+{
+    (void)st; (void)flag; (void)ftw;
+    remove(path);
+    return 0;
+}
+
+// The tests' temporary files go into one folder per run (TMPDIR), removed at the end.
+static char s_tmpDir[512];
+static void RemoveTmpDir(void)
+{
+    if (s_tmpDir[0])
+        nftw(s_tmpDir, RemoveEntry, 16, FTW_DEPTH | FTW_PHYS);
+}
+
 int main(int argc, char **argv)
 {
     bool list = false, verbose = false;
@@ -127,6 +145,15 @@ int main(int argc, char **argv)
         for (int i = 0; i < n; i++)
             printf("%s  (%s)\n", s_tests[selected[i]].name, s_tests[selected[i]].file);
         return 0;
+    }
+
+    const char *tmp = getenv("TMPDIR");
+    snprintf(s_tmpDir, sizeof s_tmpDir, "%s/wbtests-XXXXXX", tmp && *tmp ? tmp : "/tmp");
+    if (mkdtemp(s_tmpDir)) {
+        setenv("TMPDIR", s_tmpDir, 1);
+        atexit(RemoveTmpDir);
+    } else {
+        s_tmpDir[0] = 0;
     }
 
     Running running[64];
