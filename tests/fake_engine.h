@@ -20,6 +20,7 @@ typedef struct FakeEngine {
     bool imageLoadFails;        // ImgLoad returns NULL
     bool sampleLoadFails;       // SampleLoad returns 0
     void (*onFlip)(void);       // called at the end of every SysFlip
+    int createWindowFails;      // > 0: that many SysCreateWindow calls fail (counting down)
 
     // ---- recorded ----
     int flips;
@@ -37,6 +38,12 @@ typedef struct FakeEngine {
     int maxFps;
     int interpolation;
     char userFolder[512];       // a fresh temporary folder per test process
+    int windowsCreated;         // successful SysCreateWindow calls
+    char lastRenderDriver[32];  // SysCreateWindow's renderDriver ("" for NULL), failed or not
+    bool pointerClipped;        // ClipPointer's last value
+    int clipPointerCalls;
+    bool pointerHidden;         // HidePointer/ShowPointer
+    void (*focusCallback)(bool focused);   // SysSetFocusCallback's
 } FakeEngine;
 
 extern FakeEngine g_fake;
