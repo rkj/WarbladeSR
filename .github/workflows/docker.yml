@@ -5,7 +5,7 @@ name: Docker image
 
 on:
   push:
-    branches: [sdl]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -26,7 +26,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # latest and sdl for the branch head, plus sha-<commit> for each build.
+      # latest and main for the branch head, plus sha-<commit> for each build.
       - id: meta
         uses: docker/metadata-action@v5
         with:

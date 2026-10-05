@@ -11,10 +11,10 @@ As a disclaimer, this project did use a lot of LLM work (shoutout to Claude), pa
 -------------
 
 This repo contains two branches:
-- `ptk` for a function-wise binary-matching version of the code with the original PTK engine and BASS library
-- `sdl`, built on top of the `ptk` branch, removes PTK and replaces it with SDL, additionally with some improvements for modern PCs
+- `decompile` for a function-wise binary-matching version of the code with the original PTK engine and BASS library
+- `main`, built on top of the `decompile` branch, removes PTK and replaces it with SDL, additionally with some improvements for modern PCs
 
-Release SR1 is built off of the `sdl` branch.
+Release SR1 is built off of the `main` branch.
 
 ### SR branch changes
 
@@ -85,7 +85,7 @@ You can also replace `warblade.exe` with this version, but I don't recommend it.
 # Building
 
 
-## `ptk` byte-matching branch
+## `decompile` byte-matching branch
 
 ### Requirements
 
@@ -103,7 +103,7 @@ build.bat
 
 `WARBLADE_GAME_DIR` defaults to `..\game`. The result is `build\warblade.exe` (a debug-CRT build, like the original).
 
-## `sdl` modern branch
+## `main` modern branch
 
 ### Requirements
 
@@ -128,7 +128,7 @@ build.bat
 
 ### Linux
 
-The `sdl` branch also builds natively on Linux with GCC or Clang. You still need the data from a Warblade 1.34 installation (its `data/` folder).
+The `main` branch also builds natively on Linux with GCC or Clang. You still need the data from a Warblade 1.34 installation (its `data/` folder).
 
 ```sh
 sudo apt install build-essential cmake ninja-build git zlib1g-dev \
@@ -171,7 +171,7 @@ docker run -d -p 8080:8080 \
 
 Then open http://localhost:8080. `docker-compose.yml` does the same with `docker compose up -d`.
 
-Instead of building it, you can pull the image GitHub Actions builds from `sdl` (`.github/workflows/docker.yml`): `ghcr.io/rkj/warbladesr:latest`, also tagged `sdl` and `sha-<commit>`. While the package is private, log in first with a GitHub token that has `read:packages`: `docker login ghcr.io -u <github user>`.
+Instead of building it, you can pull the image GitHub Actions builds from `main` (`.github/workflows/docker.yml`): `ghcr.io/rkj/warbladesr:latest`, also tagged `main` and `sha-<commit>`. While the package is private, log in first with a GitHub token that has `read:packages`: `docker login ghcr.io -u <github user>`.
 
 - `/data`: your Warblade 1.34 `data` folder (with `warblade.pac`, `music`, `samples`), read-only. Mounting the whole installation folder works too.
 - `/saves`: the game's user folder. The page loads it into the game, and every few seconds (and when the tab is hidden) sends back the files the game changed, so saves follow you between browsers and devices.
@@ -181,13 +181,13 @@ Instead of building it, you can pull the image GitHub Actions builds from `sdl` 
 
 # Used libraries
 
-### `ptk` branch
+### `decompile` branch
 
 - [PTK](http://ptk.phelios.com)
 - [BASS](https://www.un4seen.com) (distributed with your Warblade install)
 - [zlib](https://zlib.net), [libpng](http://www.libpng.org/pub/png/libpng.html) and libjpeg, built into PTK
 
-### `sdl` branch
+### `main` branch
 
 - [SDL3](https://www.libsdl.org), [SDL3_image](https://github.com/libsdl-org/SDL_image) and [SDL3_mixer](https://github.com/libsdl-org/SDL_mixer)
 - [zlib](https://zlib.net), [libpng](http://www.libpng.org/pub/png/libpng.html) and [libjpeg-turbo](https://libjpeg-turbo.org), for images
