@@ -78,6 +78,15 @@ void ShowHiscoreTable()
 {
     int idx;
 
+#ifdef __EMSCRIPTEN__
+    // The browser build saves at every shop (AutoSaveProfile). This table ends a run (game over,
+    // retiring, a time trial's time up), and an ended single-player run must not be continued
+    // from its last shop, which the original, deleting a save when loading it, never allowed.
+    // Quitting a game (back to the title, no table) keeps the save.
+    if (g_profileIndex != -1 && g_gameMode == MODE_SINGLE)
+        DeleteProfile(g_profileIndex);
+#endif
+
     SysSetMaxFps(60);
     g_introInit = 1;
     g_bgIndex = 1;

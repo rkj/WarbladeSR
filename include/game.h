@@ -88,6 +88,7 @@ void SoundShutdown();
 
 // ---- savegame.c (0x537c80)
 void SaveProfile(int profile);
+void AutoSaveProfile(int profile);
 void SetupDifficulty();
 
 // (0x5384f0)

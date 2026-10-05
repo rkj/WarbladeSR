@@ -173,20 +173,24 @@ function scanSaves(dir = SAVE, out = new Map()) {
 }
 
 let pushing = false;
-async function pushSaves(keepalive) {
+// `closing`: the page is going away, so send with keepalive, which lets a request outlive the
+// page but only carries 64 KB in all (a suspended game is bigger: it relies on the regular push).
+const KEEPALIVE_LIMIT = 60000;
+async function pushSaves(closing) {
   if (pushing) return;
   pushing = true;
   try {
     const now = scanSaves();
     for (const [path, sig] of now) {
       if (pushed.get(path) === sig) continue;
-      const res = await fetch('saves/' + urlPath(path),
-        { method: 'PUT', body: FS.readFile(SAVE + '/' + path), keepalive });
+      const body = FS.readFile(SAVE + '/' + path);
+      const keepalive = closing && body.length <= KEEPALIVE_LIMIT;
+      const res = await fetch('saves/' + urlPath(path), { method: 'PUT', body, keepalive });
       if (res.ok) pushed.set(path, sig);
     }
     for (const path of Array.from(pushed.keys())) {
       if (now.has(path)) continue;
-      const res = await fetch('saves/' + urlPath(path), { method: 'DELETE', keepalive });
+      const res = await fetch('saves/' + urlPath(path), { method: 'DELETE', keepalive: closing });
       if (res.ok) pushed.delete(path);
     }
   } catch (e) {
@@ -221,7 +225,7 @@ function start() {
     else sync(false).catch(() => {});
   };
   setInterval(save, 5000);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(true); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(false); });
   window.addEventListener('pagehide', () => save(true));
   Module.callMain([]);
 }
@@ -231,7 +235,7 @@ var Module = {
   print: (t) => console.log(t),
   printErr: (t) => console.warn(t),
   onExit: () => {
-    if (server) pushSaves(true); else sync(false).catch(() => {});
+    if (server) pushSaves(false); else sync(false).catch(() => {});   // the page stays open
     show('panel', true);
     setStatus('Warblade has closed. Reload the page to play again.');
     show('pick', false); show('play', false); show('forget', false);
