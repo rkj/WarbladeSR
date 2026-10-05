@@ -1,5 +1,6 @@
 # Runs the tests (tests/README.md): the game-logic tests on the fake engine, the engine tests on
-# a headless SDL (tests/build-deps.sh, cached), and the red-green check (tests/mutate.py).
+# a headless SDL (tests/build-deps.sh, cached), and, weekly or on demand (it takes hours), the
+# red-green check (tests/mutate.py).
 name: Tests
 
 on:
@@ -7,6 +8,8 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * 1'   # the red-green check (hours long) runs weekly and on demand
 
 permissions:
   contents: read
@@ -39,7 +42,9 @@ jobs:
         run: build/tests/wbengine -j 4
 
   red-green:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
 

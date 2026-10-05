@@ -60,7 +60,7 @@ rebuilds, runs the tests and reports any mutation the tests don't catch:
 
 ```sh
 tests/mutate.py            # all mutations, in parallel
-tests/mutate.py -k strutil # those whose name contains "strutil"
+tests/mutate.py -k strutil # those whose name contains "strutil" (all of them take hours)
 ```
 
 When adding a test, add a mutation that breaks what it checks, and see it reported as killed.
