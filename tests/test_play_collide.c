@@ -670,7 +670,7 @@ TEST(Play_PlayerShotsHitEnemies_damages_a_boss_by_a_tenth)
     CHECK_NEAR(b->hp, 197, 1e-4);
     CHECK_EQ_INT(g_mapObjs[0].active, 0);
     CHECK_EQ_INT(PL0.hits, 1);
-    AddShot(0, 400, 150, 5);   // at least 1 damage
+    AddShot(0, 400, 150, 7);   // at least 1 damage
     PlayerShotsHitEnemies();
     CHECK_NEAR(b->hp, 196, 1e-4);
     AddShot(0, 400 - 128 + 10, 150, 30);   // outside the inner box
