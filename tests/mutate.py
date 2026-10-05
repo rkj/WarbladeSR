@@ -87,8 +87,8 @@ def run(cmd, cwd, timeout=None):
 
 
 class Worker:
-    def __init__(self):
-        self.dir = tempfile.mkdtemp(prefix="wbmutate-")
+    def __init__(self, parent=None):
+        self.dir = tempfile.mkdtemp(prefix="wbmutate-", dir=parent)
         for d in ("src", "include", "tests"):
             shutil.copytree(os.path.join(ROOT, d), os.path.join(self.dir, d),
                             ignore=shutil.ignore_patterns("__pycache__"))
@@ -133,9 +133,9 @@ class Worker:
 _worker = None
 
 
-def init_worker():
+def init_worker(parent):
     global _worker
-    _worker = Worker()
+    _worker = Worker(parent)
 
 
 def check(m):
@@ -178,7 +178,8 @@ def main():
     shutil.rmtree(base.dir, ignore_errors=True)
 
     bad = 0
-    with multiprocessing.Pool(args.j, initializer=init_worker) as pool:
+    run_dir = tempfile.mkdtemp(prefix="wbmutate-run-")   # this run's worker trees only
+    with multiprocessing.Pool(args.j, initializer=init_worker, initargs=(run_dir,)) as pool:
         for m, status, detail in pool.imap_unordered(check, muts):
             ok = status == "killed"
             bad += not ok
@@ -187,8 +188,7 @@ def main():
             if not ok and detail:
                 print("     " + detail.replace("\n", "\n     "))
     print(f"{len(muts)} mutations, {len(muts) - bad} killed, {bad} not")
-    for d in glob.glob(os.path.join(tempfile.gettempdir(), "wbmutate-*")):
-        shutil.rmtree(d, ignore_errors=True)
+    shutil.rmtree(run_dir, ignore_errors=True)
     return 1 if bad else 0
 
 
