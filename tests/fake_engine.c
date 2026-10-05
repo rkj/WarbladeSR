@@ -150,7 +150,14 @@ bool FakeFileExists(const char *hostPath)
 void SysInit(void) {}
 bool SysCreateWindow(int w, int h, bool windowed, const char *title, const char *renderDriver)
 {
-    (void)w; (void)h; (void)title; (void)renderDriver;
+    (void)w; (void)h; (void)title;
+    snprintf(g_fake.lastRenderDriver, sizeof g_fake.lastRenderDriver, "%s",
+             renderDriver ? renderDriver : "");
+    if (g_fake.createWindowFails > 0) {
+        g_fake.createWindowFails--;
+        return false;
+    }
+    g_fake.windowsCreated++;
     g_fake.fullscreen = !windowed;
     return true;
 }
@@ -183,7 +190,11 @@ bool SysHasFocus(void) { return true; }
 void SysSetIcon(const char *icoFile) { (void)icoFile; }
 void SysDisableScreenSaver(void) {}
 void SysSetFullscreen(const bool fullscreen) { g_fake.fullscreen = fullscreen; }
-void SysSetFocusCallback(void (*fn)(bool focused)) { s_focusFn = fn; }
+void SysSetFocusCallback(void (*fn)(bool focused))
+{
+    s_focusFn = fn;
+    g_fake.focusCallback = fn;
+}
 bool SysScreenshot(const char *file, int w, int h)
 {
     (void)w; (void)h;
@@ -356,9 +367,13 @@ int MouseY(void) { return g_fake.mouseY; }
 bool MouseLeft(void) { return g_fake.mouseLeft; }
 bool MouseRight(void) { return g_fake.mouseRight; }
 void MouseWarp(int x, int y) { g_fake.mouseX = x; g_fake.mouseY = y; }
-void ShowPointer(void) {}
-void HidePointer(void) {}
-void ClipPointer(bool on) { (void)on; }
+void ShowPointer(void) { g_fake.pointerHidden = false; }
+void HidePointer(void) { g_fake.pointerHidden = true; }
+void ClipPointer(bool on)
+{
+    g_fake.pointerClipped = on;
+    g_fake.clipPointerCalls++;
+}
 bool JoyEnable(char joy) { return joy >= 0 && joy < 2 && g_fake.joyPresent[(int)joy]; }
 long JoyX(char joy, char hat) { (void)joy; (void)hat; return 0x7fff; }
 long JoyY(char joy, char hat) { (void)joy; (void)hat; return 0x7fff; }
