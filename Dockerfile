@@ -1,8 +1,9 @@
-# Warblade SR in the browser, served with the game data and saves on the server (README.md,
-# "Docker"). The image has no game data: mount your Warblade 1.34 data folder at /data.
+# Warblade SR in the browser, served as a read-only static site (README.md, "Docker";
+# docs/web-security.md). The image has no game data: mount your Warblade data folder at /data.
+# Players' profiles and saves stay in their own browsers; the server never writes anything.
 #
 #   docker build -t warblade-sr .
-#   docker run -p 8080:8080 -v /path/to/Warblade/data:/data:ro -v warblade-saves:/saves warblade-sr
+#   docker run -p 8080:8080 -v /path/to/Warblade/data:/data:ro --read-only --tmpfs /tmp warblade-sr
 
 # ---- build: the WebAssembly game (build-web.sh) ----
 FROM emscripten/emsdk:4.0.23 AS build
@@ -12,14 +13,19 @@ WORKDIR /src
 COPY . .
 RUN ./build-web.sh
 
-# ---- run: a small Python server for the page, the data and the saves ----
-FROM python:3.12-alpine
-RUN adduser -D -u 1000 warblade && mkdir -p /app/web /data /saves && chown warblade /saves
-COPY --from=build /src/build/web/index.html /src/build/web/warblade.js /src/build/web/warblade.wasm /app/web/
-COPY docker/server.py /app/server.py
-USER warblade
+# ---- run: nginx, unprivileged, serving files it can't change ----
+FROM nginxinc/nginx-unprivileged:1.30-alpine
+USER root
+RUN mkdir -p /app/web /data /etc/warblade
+COPY --from=build /src/build/web/index.html /src/build/web/page.js /src/build/web/page.css \
+                  /src/build/web/warblade.js /src/build/web/warblade.wasm /app/web/
+COPY docker/nginx.conf /etc/warblade/nginx.conf
+COPY --chmod=755 docker/entrypoint.sh /usr/local/bin/warblade-entrypoint
+# Root owns everything and nginx (uid 101) can only read it; nginx writes only under /tmp.
+RUN chmod -R a=rX,u+w /app /etc/warblade
+USER 101
 ENV PORT=8080
 EXPOSE 8080
-VOLUME ["/saves"]
-HEALTHCHECK --interval=30s --timeout=5s CMD wget -q -O /dev/null "http://127.0.0.1:${PORT}/" || exit 1
-CMD ["python3", "/app/server.py"]
+HEALTHCHECK --interval=30s --timeout=5s CMD wget -q -O /dev/null "http://127.0.0.1:${PORT}/healthz" || exit 1
+ENTRYPOINT ["/usr/local/bin/warblade-entrypoint"]
+CMD []

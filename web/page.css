@@ -1,0 +1,26 @@
+/* The browser build's page style (web/index.html). */
+:root { --bg: #05060a; --panel: #10131c; --line: #2a3142; --text: #d8dde8; --dim: #8a93a6; --accent: #e8b43a; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+             font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+#stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+/* 800x600 picture, scaled to fit the page; SDL sets the canvas' own size. */
+#canvas { display: block; width: min(100vw, calc(100vh * 4 / 3)) !important;
+          height: min(100vh, calc(100vw * 3 / 4)) !important; image-rendering: pixelated;
+          background: #000; outline: none; }
+#panel { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+         background: rgba(5, 6, 10, 0.92); padding: 16px; }
+#panel[hidden] { display: none; }
+.card { max-width: 520px; width: 100%; background: var(--panel); border: 1px solid var(--line);
+        border-radius: 10px; padding: 28px; }
+h1 { margin: 0 0 6px; font-size: 22px; letter-spacing: 0.04em; color: var(--accent); }
+p { margin: 10px 0; color: var(--dim); }
+.row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+button, label.button { appearance: none; border: 1px solid var(--line); background: #1a2030;
+        color: var(--text); padding: 10px 16px; border-radius: 6px; font: inherit; cursor: pointer; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #1a1405; font-weight: 600; }
+button:disabled { opacity: 0.5; cursor: default; }
+input[type=file] { display: none; }
+#status { min-height: 1.5em; color: var(--text); }
+.small { font-size: 13px; }
+a { color: var(--accent); }

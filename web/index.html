@@ -1,41 +1,16 @@
 <!doctype html>
-<!-- The browser build's page (README.md, "Browser"): loads the player's own Warblade data/
-     into the virtual file system, keeps it and the saves in IndexedDB, and starts warblade.js. -->
+<!-- The browser build's page (README.md, "Browser"): page.js loads the Warblade data into the
+     virtual file system, keeps the saves in this browser (IndexedDB) and starts warblade.js.
+     No inline script or style, so the server's Content-Security-Policy can forbid them. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Warblade SR</title>
-<style>
-  :root { --bg: #05060a; --panel: #10131c; --line: #2a3142; --text: #d8dde8; --dim: #8a93a6; --accent: #e8b43a; }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
-               font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  #stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
-  /* 800x600 picture, scaled to fit the page; SDL sets the canvas' own size. */
-  #canvas { display: block; width: min(100vw, calc(100vh * 4 / 3)) !important;
-            height: min(100vh, calc(100vw * 3 / 4)) !important; image-rendering: pixelated;
-            background: #000; outline: none; }
-  #panel { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
-           background: rgba(5, 6, 10, 0.92); padding: 16px; }
-  #panel[hidden] { display: none; }
-  .card { max-width: 520px; width: 100%; background: var(--panel); border: 1px solid var(--line);
-          border-radius: 10px; padding: 28px; }
-  h1 { margin: 0 0 6px; font-size: 22px; letter-spacing: 0.04em; color: var(--accent); }
-  p { margin: 10px 0; color: var(--dim); }
-  .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
-  button, label.button { appearance: none; border: 1px solid var(--line); background: #1a2030;
-          color: var(--text); padding: 10px 16px; border-radius: 6px; font: inherit; cursor: pointer; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #1a1405; font-weight: 600; }
-  button:disabled { opacity: 0.5; cursor: default; }
-  input[type=file] { display: none; }
-  #status { min-height: 1.5em; color: var(--text); }
-  .small { font-size: 13px; }
-  a { color: var(--accent); }
-</style>
+<link rel="stylesheet" href="page.css">
 </head>
 <body>
-<div id="stage"><canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas></div>
+<div id="stage"><canvas id="canvas" tabindex="-1"></canvas></div>
 
 <div id="panel">
   <div class="card">
@@ -50,221 +25,22 @@
       <button class="primary" id="play" hidden>Play</button>
       <button id="forget" hidden>Forget data</button>
     </div>
-    <p class="small">Saves and profiles stay in this browser. Keys: arrows to move, left Ctrl to fire,
-       left Shift for rockets, P to pause, Esc for the menu.</p>
+    <div class="row">
+      <button id="export" hidden>Export saves</button>
+      <label class="button" id="import" hidden>Import saves
+        <input type="file" id="import-file" accept=".tar,application/x-tar"></label>
+    </div>
+    <p class="small">Profiles, saves, settings and high scores stay in this browser; nothing is sent
+       to the server. Use Export saves to keep a copy or move them to another browser.</p>
+    <p class="small">A profile password only keeps other people using this browser out of that
+       profile. It is stored readable in the browser and in exported saves: don't use a password
+       you use anywhere else.</p>
+    <p class="small">Keys: arrows to move, left Ctrl to fire, left Shift for rockets, P to pause,
+       Esc for the menu.</p>
   </div>
 </div>
 
-<script>
-'use strict';
-const $ = (id) => document.getElementById(id);
-const DATA = '/data';   // the game looks for data/ in its own folder, / here
-const SAVE = '/save';   // the game's user folder in the browser (SysUserFolder)
-
-// Server mode: the page is served by the Docker image (docker/server.py), which has the data
-// and keeps the saves. Otherwise the player chooses a local folder and it all stays in
-// IndexedDB.
-let server = false;
-
-function setStatus(text) { $('status').textContent = text; }
-function show(id, on) { $(id).hidden = !on; }
-
-function sync(populate) {
-  return new Promise((resolve, reject) =>
-    FS.syncfs(populate, (err) => (err ? reject(err) : resolve())));
-}
-
-function exists(path) {
-  try { FS.stat(path); return true; } catch (e) { return false; }
-}
-
-function mkdirs(path) {
-  let cur = '';
-  for (const part of path.split('/').filter(Boolean)) {
-    cur += '/' + part;
-    if (!exists(cur)) FS.mkdir(cur);
-  }
-}
-
-function removeTree(path) {
-  for (const name of FS.readdir(path)) {
-    if (name === '.' || name === '..') continue;
-    const p = path + '/' + name;
-    if (FS.isDir(FS.stat(p).mode)) { removeTree(p); FS.rmdir(p); } else FS.unlink(p);
-  }
-}
-
-function showReady() {
-  setStatus(server ? 'Ready. Saves are kept on this server.' : 'Your Warblade data is loaded.');
-  show('pick', false); show('play', true); show('forget', !server);
-  $('play').focus();
-}
-
-function showPicker(message) {
-  setStatus(message || 'Choose the folder you installed Warblade 1.34 in.');
-  show('pick', true); show('play', false); show('forget', false);
-}
-
-// Copies the chosen folder's data/ (the files next to warblade.pac) into DATA.
-async function loadFolder(files) {
-  const list = Array.from(files);
-  const pac = list.find((f) => f.name.toLowerCase() === 'warblade.pac');
-  if (!pac) {
-    showPicker('No warblade.pac in that folder. Choose your Warblade 1.34 folder or its data folder.');
-    return;
-  }
-  const rel = pac.webkitRelativePath || pac.name;
-  const prefix = rel.slice(0, rel.length - pac.name.length);
-  const wanted = list.filter((f) => (f.webkitRelativePath || f.name).startsWith(prefix));
-  if (exists(DATA)) removeTree(DATA);
-  let done = 0;
-  for (const f of wanted) {
-    const sub = (f.webkitRelativePath || f.name).slice(prefix.length);
-    const dest = DATA + '/' + sub;
-    mkdirs(dest.slice(0, dest.lastIndexOf('/')));
-    FS.writeFile(dest, new Uint8Array(await f.arrayBuffer()));
-    if (++done % 20 === 0) setStatus('Copying ' + done + ' / ' + wanted.length + ' files…');
-  }
-  setStatus('Saving to this browser…');
-  await sync(false);
-  showReady();
-}
-
-// ---- server mode ----
-
-const urlPath = (p) => p.split('/').map(encodeURIComponent).join('/');
-
-async function fetchJson(url) {
-  try {
-    const res = await fetch(url, { cache: 'no-store' });
-    return res.ok ? await res.json() : null;
-  } catch (e) {
-    return null;
-  }
-}
-
-// Downloads `files` (paths relative to `base`) into the folder `dest`, a few at a time.
-async function download(base, files, dest, label) {
-  let next = 0, done = 0;
-  const worker = async () => {
-    while (next < files.length) {
-      const f = files[next++];
-      const res = await fetch(base + urlPath(f.path));
-      if (!res.ok) throw new Error(f.path + ': HTTP ' + res.status);
-      const path = dest + '/' + f.path;
-      mkdirs(path.slice(0, path.lastIndexOf('/')));
-      FS.writeFile(path, new Uint8Array(await res.arrayBuffer()));
-      if (++done % 10 === 0 || done === files.length) setStatus(label + ' ' + done + ' / ' + files.length + '…');
-    }
-  };
-  await Promise.all(Array.from({ length: 6 }, worker));
-}
-
-// What's in SAVE: path -> "mtime:size", to find what the game changed since the last push.
-let pushed = new Map();
-function scanSaves(dir = SAVE, out = new Map()) {
-  for (const name of FS.readdir(dir)) {
-    if (name === '.' || name === '..') continue;
-    const p = dir + '/' + name, st = FS.stat(p);
-    if (FS.isDir(st.mode)) scanSaves(p, out);
-    else out.set(p.slice(SAVE.length + 1), st.mtime.getTime() + ':' + st.size);
-  }
-  return out;
-}
-
-let pushing = false;
-async function pushSaves(keepalive) {
-  if (pushing) return;
-  pushing = true;
-  try {
-    const now = scanSaves();
-    for (const [path, sig] of now) {
-      if (pushed.get(path) === sig) continue;
-      const res = await fetch('saves/' + urlPath(path),
-        { method: 'PUT', body: FS.readFile(SAVE + '/' + path), keepalive });
-      if (res.ok) pushed.set(path, sig);
-    }
-    for (const path of Array.from(pushed.keys())) {
-      if (now.has(path)) continue;
-      const res = await fetch('saves/' + urlPath(path), { method: 'DELETE', keepalive });
-      if (res.ok) pushed.delete(path);
-    }
-  } catch (e) {
-    console.warn('Could not save to the server', e);
-  } finally {
-    pushing = false;
-  }
-}
-
-async function loadFromServer(manifest) {
-  server = true;
-  $('intro').textContent = 'Warblade 1.34 by Edgar M. Vigdal, running in your browser, ' +
-    'with the game data and saves on this server.';
-  mkdirs(DATA);
-  mkdirs(SAVE);
-  await download('data/', manifest.files, DATA, 'Loading game data');
-  const saves = await fetchJson('api/saves');
-  if (saves) await download('saves/', saves.files, SAVE, 'Loading saves');
-  pushed = scanSaves();
-  showReady();
-}
-
-function start() {
-  show('panel', false);
-  FS.chdir('/');
-  $('canvas').focus();
-  // Saves are written to /save by the game; keep IndexedDB up to date. When the tab is hidden
-  // or closed, have the game write its settings first (it otherwise does so only on quit).
-  const save = (closing) => {
-    try { Module._WebSaveSettings(); } catch (e) { console.warn('WebSaveSettings', e); }
-    if (server) pushSaves(closing === true);
-    else sync(false).catch(() => {});
-  };
-  setInterval(save, 5000);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(true); });
-  window.addEventListener('pagehide', () => save(true));
-  Module.callMain([]);
-}
-
-var Module = {
-  canvas: $('canvas'),
-  print: (t) => console.log(t),
-  printErr: (t) => console.warn(t),
-  onExit: () => {
-    if (server) pushSaves(true); else sync(false).catch(() => {});
-    show('panel', true);
-    setStatus('Warblade has closed. Reload the page to play again.');
-    show('pick', false); show('play', false); show('forget', false);
-  },
-  onAbort: (what) => {
-    show('panel', true);
-    setStatus('Warblade stopped with an error: ' + what);
-  },
-  onRuntimeInitialized: async () => {
-    const manifest = await fetchJson('api/data');
-    if (manifest) {
-      loadFromServer(manifest).catch((err) => setStatus('Could not load the game data: ' + err));
-      return;
-    }
-    const IDBFS = FS.filesystems.IDBFS;
-    mkdirs(DATA); FS.mount(IDBFS, {}, DATA);
-    mkdirs('/save'); FS.mount(IDBFS, {}, '/save');
-    try { await sync(true); } catch (e) { console.warn('IndexedDB unavailable', e); }
-    if (exists(DATA + '/warblade.pac')) showReady(); else showPicker();
-  },
-};
-
-$('folder').addEventListener('change', (e) => {
-  setStatus('Reading folder…');
-  loadFolder(e.target.files).catch((err) => showPicker('Could not read that folder: ' + err));
-});
-$('play').addEventListener('click', start);
-$('forget').addEventListener('click', async () => {
-  removeTree(DATA);
-  await sync(false);
-  showPicker();
-});
-</script>
+<script src="page.js"></script>
 <script async src="warblade.js"></script>
 </body>
 </html>

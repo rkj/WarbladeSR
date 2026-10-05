@@ -152,32 +152,32 @@ source /path/to/emsdk/emsdk_env.sh
 python3 -m http.server -d build/web 8000     # then open http://localhost:8000
 ```
 
-- `build-web.sh` builds zlib, SDL3, SDL3_image and SDL3_mixer for WebAssembly into `build/deps-web` the first time, then the game into `build/web` (`index.html`, `warblade.js`, `warblade.wasm`). The page (`web/index.html`) has to be served over HTTP; opening the file directly won't load the WebAssembly.
+- `build-web.sh` builds zlib, SDL3, SDL3_image and SDL3_mixer for WebAssembly into `build/deps-web` the first time (each checked against a pinned commit), then the game into `build/web` (`index.html`, `page.js`, `page.css`, `warblade.js`, `warblade.wasm`). The page (`web/`) has to be served over HTTP; opening the file directly won't load the WebAssembly.
 - The game keeps its blocking main loop thanks to Asyncify: `SysFlip` and `AudioUpdate` yield to the browser.
-- Saves, profiles and settings live in the browser too (`/save`, kept in IndexedDB). The page saves the settings every few seconds and when the tab is hidden, since players close the tab rather than quit.
+- Saves, profiles and settings live in the browser too (`/save`, kept in IndexedDB), and are never sent anywhere. The page saves the settings every few seconds and when the tab is hidden, since players close the tab rather than quit. **Export saves** and **Import saves** on the page move them between browsers as a `.tar` file.
+- A profile's password only keeps other people using the same browser out of that profile: the game stores it readable in the profile file (`docs/web-security.md`, "Profile passwords").
 - It starts inside the page; `W` (or the settings page) switches to fullscreen. Frame interpolation is off in the browser.
 
 ### Docker
 
-The browser version can also be served from a Docker image, with the game data and the saves on the server: players just open the page, and their profiles, saves, settings and high scores live in a volume. The image has no game data; you mount your own.
+The browser version can also be served from a Docker image: a read-only static site (nginx) with the page, the game and, if you mount it, your Warblade data, so players just open the page. The server accepts no uploads: profiles, saves, settings and high scores stay in each player's browser. The image has no game data; you mount your own.
 
 ```sh
 docker build -t warblade-sr .
-docker run -d -p 8080:8080 \
+docker run -d -p 8080:8080 --read-only --tmpfs /tmp --cap-drop ALL \
     -v /path/to/Warblade/data:/data:ro \
-    -v warblade-saves:/saves \
     warblade-sr
 ```
 
 Then open http://localhost:8080. `docker-compose.yml` does the same with `docker compose up -d`.
 
-Instead of building it, you can pull the image GitHub Actions builds from `main` (`.github/workflows/docker.yml`): `ghcr.io/rkj/warbladesr:latest`, also tagged `main` and `sha-<commit>`. While the package is private, log in first with a GitHub token that has `read:packages`: `docker login ghcr.io -u <github user>`.
+Instead of building it, you can pull the image GitHub Actions builds and tests from `main` (`.github/workflows/docker.yml`): `ghcr.io/rkj/warbladesr:latest`, also tagged `main` and `sha-<commit>`. While the package is private, log in first with a GitHub token that has `read:packages`: `docker login ghcr.io -u <github user>`.
 
-- `/data`: your Warblade 1.34 `data` folder (with `warblade.pac`, `music`, `samples`), read-only. Mounting the whole installation folder works too.
-- `/saves`: the game's user folder. The page loads it into the game, and every few seconds (and when the tab is hidden) sends back the files the game changed, so saves follow you between browsers and devices.
-- The saves are shared by everyone using the server, like one PC: players get their own profiles in the game's profile menu. Two people playing at the same time can overwrite each other's settings file.
-- The server is `docker/server.py` (Python standard library). The build stage runs `build-web.sh` in the official Emscripten image.
-
+- `/data`: your Warblade 1.34 `data` folder (with `warblade.pac`, `music`, `samples`), read-only. Mounting the whole installation folder works too. Without it, players choose their own folder, as with the plain browser build. Anyone who can reach the server can download what you mount.
+- `PORT` (default `8080`) and `WARBLADE_TRUSTED_PROXIES`: the addresses of a reverse proxy in front of it, so the per-client rate limits see the real clients (`docker/entrypoint.sh`).
+- Only `GET` and `HEAD` are answered. Requests have size, timeout, rate and concurrency limits, and every response has a Content-Security-Policy and the usual security headers (`docker/nginx.conf`).
+- Earlier images kept everyone's saves in a `/saves` volume on the server. This one ignores it; `docs/web-security.md` explains how to back it up, hand the saves to players (Import saves) and roll back.
+- `tests/run.sh` tests the image (`tests/README.md`). `docs/web-security.md` has the security review, the data flow, deployment and the remaining risks.
 
 # Used libraries
 

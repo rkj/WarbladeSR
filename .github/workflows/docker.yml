@@ -1,20 +1,54 @@
-# Builds the Docker image (Dockerfile; README.md, "Docker") and publishes it to the GitHub
-# Container Registry as ghcr.io/<owner>/<repo>. GitHub makes a new package private; its
-# visibility is changed in the package's settings.
+# Builds the Docker image (Dockerfile; README.md, "Docker"), tests it (tests/run.sh) and, from
+# main, publishes it to the GitHub Container Registry as ghcr.io/<owner>/<repo>. GitHub
+# makes a new package private; its visibility is changed in the package's settings.
 name: Docker image
 
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
-  image:
+  test:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # The image, built once and loaded for the tests; the publish job reuses the cache.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: warblade-sr:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Playwright
+        working-directory: tests
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Test
+        run: IMAGE=warblade-sr:test ./tests/run.sh
+
+  image:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
