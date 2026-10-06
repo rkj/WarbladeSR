@@ -661,6 +661,12 @@ file: src/profile/account.c
 + if (g_acc.version == 99) {
 expect: Profile_DecodeAccount_v1_walks_the_whole_chain
 
+== profile: Decode v0 copies past legacy account
+file: src/profile/account.c
+-             memcpy(&g_accV0, &g_acc, sizeof g_accV0);
++             memcpy(&g_accV0, &g_acc, SIZEOF_ACCOUNT);
+expect: Profile_DecodeAccount_v0_migrates_compressed_legacy_account_without_neighbor_overwrite
+
 == profile: Decode v4 no repoint
 file: src/profile/account.c
 -             for (j2 = 0; j2 < 20; j2++) {
