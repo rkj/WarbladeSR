@@ -32,6 +32,11 @@ jobs:
           cmake -S tests -B build/tests -G Ninja -DCMAKE_PREFIX_PATH=$PWD/build/deps-test/prefix
           cmake --build build/tests
 
+      - name: Runner infrastructure checks
+        run: |
+          python3 tests/test_runner.py
+          python3 tests/test_mutate.py
+
       - name: Game-logic tests
         run: build/tests/wbtests -j 4
 

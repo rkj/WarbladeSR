@@ -327,3 +327,17 @@ TEST(engine_SysPerfCounter_ticks_at_SysPerfFreq)
     s = (double)(b - a) / f;
     CHECK_MSG(s >= 0.045 && s < 0.5, "50 ms measured as %g s", s);
 }
+
+TEST(engine_SysPadState_virtual_controls_belong_only_to_player_one)
+{
+    InitVideo();
+    SysSetVirtualPad(PAD_LEFT | PAD_FIRE | PAD_PAUSE);
+    CHECK_EQ_INT(SysPadState(0), PAD_LEFT | PAD_FIRE | PAD_PAUSE);
+    CHECK_EQ_INT(SysPadState(1), 0);
+    CHECK_EQ_INT(SysPadState(-1), 0);
+    CHECK_EQ_INT(SysPadState(4), 0);
+    SysSetVirtualPad(PAD_RIGHT | PAD_ROCKET);
+    CHECK_EQ_INT(SysPadState(0), PAD_RIGHT | PAD_ROCKET);
+    SysSetVirtualPad(0);
+    CHECK_EQ_INT(SysPadState(0), 0);
+}

@@ -170,17 +170,15 @@ unsigned int GetFlagMask(unsigned char joy)
 }
 #undef JOY_BIT
 
-// NOTE: discards JoyX's return value and returns nothing itself; kept as in the
-// original (likely dead/unused code, or the axis reading is consumed via a side effect).
-void GetJoyX(unsigned char joy)
+// Return legacy joystick axes explicitly; callers must not depend on register leftovers.
+long GetJoyX(unsigned char joy)
 {
-    JoyX(joy, 0);
+    return JoyX(joy, 0);
 }
 
-// NOTE: discards JoyY's return value and returns nothing itself; see GetJoyX.
-void GetJoyY(unsigned char joy)
+long GetJoyY(unsigned char joy)
 {
-    JoyY(joy, 0);
+    return JoyY(joy, 0);
 }
 
 // True if player p is pressing "move left" this frame: keyboard, joystick axis (setting
@@ -243,10 +241,10 @@ int InputLeft(int p)
     }
 
     if (g_save.players[p].inputDevice == DEVICE_JOYSTICK1) {
-        if (((int (*)(unsigned char))GetJoyX)(0) < g_joyCenter - g_joyDead) {
+        if (GetJoyX(0) < g_joyCenter - g_joyDead) {
             if (g_joyCenter == 0.0)
                 g_joyCenter = 1.0f;
-            g_joystickSpeedMul = (g_joyCenter - ((int (*)(unsigned char))GetJoyX)(0)) / g_joyCenter;
+            g_joystickSpeedMul = (g_joyCenter - GetJoyX(0)) / g_joyCenter;
             return 1;
         } else {
             g_joystickSpeedMul = 1.0f;
@@ -255,10 +253,10 @@ int InputLeft(int p)
     }
 
     if (g_save.players[p].inputDevice == DEVICE_JOYSTICK2) {
-        if (((int (*)(unsigned char))GetJoyX)(1) < g_joyCenter - g_joyDead) {
+        if (GetJoyX(1) < g_joyCenter - g_joyDead) {
             if (g_joyCenter == 0.0)
                 g_joyCenter = 1.0f;
-            g_joystickSpeedMul = (g_joyCenter - ((int (*)(unsigned char))GetJoyX)(1)) / g_joyCenter;
+            g_joystickSpeedMul = (g_joyCenter - GetJoyX(1)) / g_joyCenter;
             return 1;
         } else {
             g_joystickSpeedMul = 1.0f;
@@ -313,10 +311,10 @@ int InputRight(int p)
     }
 
     if (g_save.players[p].inputDevice == DEVICE_JOYSTICK1) {
-        if (((int (*)(unsigned char))GetJoyX)(0) > g_joyCenter + g_joyDead) {
+        if (GetJoyX(0) > g_joyCenter + g_joyDead) {
             if (g_joyCenter == 0.0)
                 g_joyCenter = 1.0f;
-            g_joystickSpeedMul = (((int (*)(unsigned char))GetJoyX)(0) - g_joyCenter) / g_joyCenter;
+            g_joystickSpeedMul = (GetJoyX(0) - g_joyCenter) / g_joyCenter;
             return 1;
         } else {
             g_joystickSpeedMul = 1.0f;
@@ -325,10 +323,10 @@ int InputRight(int p)
     }
 
     if (g_save.players[p].inputDevice == DEVICE_JOYSTICK2) {
-        if (((int (*)(unsigned char))GetJoyX)(1) > g_joyCenter + g_joyDead) {
+        if (GetJoyX(1) > g_joyCenter + g_joyDead) {
             if (g_joyCenter == 0.0)
                 g_joyCenter = 1.0f;
-            g_joystickSpeedMul = (((int (*)(unsigned char))GetJoyX)(1) - g_joyCenter) / g_joyCenter;
+            g_joystickSpeedMul = (GetJoyX(1) - g_joyCenter) / g_joyCenter;
             return 1;
         } else {
             g_joystickSpeedMul = 1.0f;
@@ -350,13 +348,13 @@ int InputDown(int p)
             return 0;
     }
     if (g_save.players[p].inputDevice == DEVICE_JOYSTICK1) {
-        if (((int (*)(unsigned char))GetJoyY)(0) > g_joyCenter + g_joyDead)
+        if (GetJoyY(0) > g_joyCenter + g_joyDead)
             return 1;
         else
             return 0;
     }
     if (g_save.players[p].inputDevice == DEVICE_JOYSTICK2) {
-        if (((int (*)(unsigned char))GetJoyY)(1) > g_joyCenter + g_joyDead)
+        if (GetJoyY(1) > g_joyCenter + g_joyDead)
             return 1;
         else
             return 0;
@@ -386,14 +384,14 @@ int InputUp(int p)
     }
 
     if (g_save.players[p].inputDevice == DEVICE_JOYSTICK1) {
-        if (((int (*)(unsigned char))GetJoyY)(0) < g_joyCenter - g_joyDead)
+        if (GetJoyY(0) < g_joyCenter - g_joyDead)
             return 1;
         else
             return 0;
     }
 
     if (g_save.players[p].inputDevice == DEVICE_JOYSTICK2) {
-        if (((int (*)(unsigned char))GetJoyY)(1) < g_joyCenter - g_joyDead)
+        if (GetJoyY(1) < g_joyCenter - g_joyDead)
             return 1;
         else
             return 0;

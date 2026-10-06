@@ -176,6 +176,59 @@ TEST(Play_GetFlagMask_has_no_buttons_without_a_joystick)
     CHECK_EQ_INT(GetFlagMask(1), 0);
 }
 
+// ---------------------------------------------------------------- gamepads and touch controls
+
+TEST(Play_Input_each_pad_bit_reads_only_its_own_action_and_player)
+{
+    StartPlay();
+    const unsigned bits[A_COUNT] = {PAD_LEFT, PAD_RIGHT, PAD_UP, PAD_DOWN,
+                                   PAD_FIRE, PAD_ROCKET, PAD_PAUSE, PAD_PROFILE};
+    for (int p = 0; p < 2; p++) {
+        for (int a = 0; a < A_COUNT; a++) {
+            g_fake.padBits[0] = g_fake.padBits[1] = 0;
+            g_fake.padBits[p] = bits[a];
+            for (int b = 0; b < A_COUNT; b++) {
+                CHECK_EQ_INT(Action(b, p), a == b);
+                CHECK_EQ_INT(Action(b, 1 - p), 0);
+            }
+        }
+    }
+}
+
+TEST(Play_Input_touch_and_keyboard_combine_without_controlling_player_two)
+{
+    StartPlay();
+    SysSetVirtualPad(PAD_LEFT | PAD_FIRE);
+    FakePressKey((enum EKeyboardLayout)g_cfg.rocket[0]);
+    CHECK_EQ_INT(InputLeft(0), 1);
+    CHECK_EQ_INT(InputFire(0), 1);
+    CHECK_EQ_INT(InputRocket(0), 1);
+    CHECK_EQ_INT(InputLeft(1), 0);
+    CHECK_EQ_INT(InputFire(1), 0);
+    CHECK_EQ_INT(InputMenuFire(0), 1);
+    SysSetVirtualPad(0);
+    CHECK_EQ_INT(InputLeft(0), 0);
+    CHECK_EQ_INT(InputFire(0), 0);
+    CHECK_EQ_INT(InputRocket(0), 1);
+}
+
+TEST(Play_Input_legacy_and_unknown_devices_ignore_pad_bits)
+{
+    StartPlay();
+    const int devices[] = {DEVICE_JOYSTICK1, DEVICE_JOYSTICK2, 7};
+    g_joyCenter = 0x7fff;
+    g_joyDead = 1000;
+    g_fake.padBits[0] = ~0u;
+    SysSetVirtualPad(~0u);
+    for (unsigned i = 0; i < sizeof devices / sizeof devices[0]; i++) {
+        PL0.inputDevice = devices[i];
+        g_cfg.device[0] = devices[i];
+        for (int a = 0; a < A_COUNT; a++)
+            CHECK_EQ_INT(Action(a, 0), 0);
+        CHECK_EQ_INT(InputMenuFire(0), 0);
+    }
+}
+
 // ---------------------------------------------------------------- autoplay
 
 TEST(Play_InputFire_in_autoplay_shows_the_banner)
@@ -366,6 +419,7 @@ TEST(Play_InputMenuFire_in_autoplay_needs_permission)
 TEST(Play_FindTargetItem_picks_the_lowest_item_above_the_ship)
 {
     StartPlay();
+    g_targetItemY = 123;
     FindTargetItem();
     CHECK_NEAR(g_targetItemX, -1, 1e-6);
     CHECK_NEAR(g_targetItemY, -1, 1e-6);
@@ -381,6 +435,8 @@ TEST(Play_FindTargetItem_picks_the_lowest_item_above_the_ship)
     CHECK_NEAR(g_targetItemX, 200, 1e-6);
     CHECK_NEAR(g_targetItemY, 400, 1e-6);
     g_items[7] = (Bonus){.alive = 1, .active = 1, .x = 71, .y = 581};
+    // Later entries are higher on screen; selection must not depend on slot order.
+    g_items[8] = (Bonus){.alive = 1, .active = 1, .x = 250, .y = 200};
     FindTargetItem();
     CHECK_NEAR(g_targetItemX, 71, 1e-6);
     CHECK_NEAR(g_targetItemY, 581, 1e-6);
@@ -431,6 +487,10 @@ TEST(Play_FindTargetGem_picks_the_lowest_gem_centre)
     g[5].active = 1; g[5].x = 51; g[5].w = 40; g[5].y = 549;
     FindTargetGem();
     CHECK_NEAR(g_target847X, 71, 1e-6);
+    g[5].active = 0;
+    g[MAX_FALLING_GEMS - 1] = (FallingSprite){.active = 1, .x = 400, .w = 20, .y = 549};
+    FindTargetGem();
+    CHECK_NEAR(g_target847X, 410, 1e-6);
 }
 
 TEST(Play_FindTargetMeteor_picks_the_lowest_meteor_bottom)
@@ -448,4 +508,33 @@ TEST(Play_FindTargetMeteor_picks_the_lowest_meteor_bottom)
     FindTargetMeteor();
     CHECK_NEAR(g_targetB49X, 215.5, 1e-6);
     CHECK_NEAR(g_targetB49Y, 300, 1e-6);
+}
+
+TEST(Play_Input_legacy_axes_return_values_and_respect_player_and_deadzone)
+{
+    StartPlay();
+    g_joyCenter = 0x7fff;
+    g_joyDead = 1000;
+    PL0.inputDevice = DEVICE_JOYSTICK1;
+    PL1.inputDevice = DEVICE_JOYSTICK2;
+    g_fake.joyX[0] = 1234;
+    g_fake.joyY[1] = 60000;
+    CHECK_EQ_INT(GetJoyX(0), 1234);
+    CHECK_EQ_INT(GetJoyY(1), 60000);
+    CHECK_EQ_INT(InputLeft(0), 1);
+    CHECK_NEAR(g_joystickSpeedMul, (32767.0 - 1234) / 32767.0, 1e-6);
+    CHECK_EQ_INT(InputRight(0), 0);
+    CHECK_EQ_INT(InputLeft(1), 0);
+    CHECK_EQ_INT(InputDown(1), 1);
+    CHECK_EQ_INT(InputUp(1), 0);
+    CHECK_EQ_INT(InputDown(0), 0);
+    g_fake.joyX[0] = g_joyCenter - g_joyDead;
+    g_fake.joyY[1] = g_joyCenter + g_joyDead;
+    CHECK_EQ_INT(InputLeft(0), 0);
+    CHECK_EQ_INT(InputDown(1), 0);
+    g_fake.joyX[1] = 60000;
+    g_fake.joyY[0] = 1234;
+    CHECK_EQ_INT(InputRight(1), 1);
+    CHECK_NEAR(g_joystickSpeedMul, (60000.0 - 32767) / 32767.0, 1e-6);
+    CHECK_EQ_INT(InputUp(0), 1);
 }

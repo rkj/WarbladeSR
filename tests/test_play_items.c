@@ -786,6 +786,9 @@ TEST(Play_Pickup_rank_gems_out_of_order_break_the_sequence)
     Pickup(ITEM_RANK_GEM_5);
     Pickup(ITEM_RANK_GEM_6);
     CHECK_EQ_INT(PL0.superAuto, 0);
+    Pickup(ITEM_RANK_GEM_1);
+    CHECK(strcmp(g_alertMsg, "*** 500 LEVELS ADDED ***") != 0);
+    CHECK_EQ_INT(PL0.bulkLevelsCooldown, 0);
 }
 
 TEST(Play_Pickup_rank_gems_6_to_1_add_500_levels)
@@ -1179,13 +1182,15 @@ TEST(Play_SpawnPowerup_rolls_40_27_20_13_percent_money)
 TEST(Play_SpawnBonus_rolls_a_weighted_type)
 {
     StartPlay();
+    g_itemBonusSrcX[ITEM_SCOOP] = 123;
+    g_itemBonusSrcX[ITEM_SCOOP + 1] = 456;
     for (int k = 0; k < NUM_BONUS_WEIGHTS; k++)
         g_bonusWeight[k] = 0;
     g_bonusWeight[ITEM_SCOOP] = 3;
     SpawnBonus(200, 100);
     CHECK_EQ_INT(g_items[0].alive, 1);
     CHECK_EQ_INT(g_items[0].type, ITEM_SCOOP);
-    CHECK_EQ_INT(g_items[0].srcX, g_itemBonusSrcX[ITEM_SCOOP]);
+    CHECK_EQ_INT(g_items[0].srcX, 123);
     CHECK(g_items[0].x >= 197 && g_items[0].x < 203);
     CHECK(g_items[0].vy >= 1.2f && g_items[0].vy < 1.8f);
     g_bonusWeight[ITEM_SCOOP] = 0;

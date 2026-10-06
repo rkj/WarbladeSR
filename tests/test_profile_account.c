@@ -520,6 +520,8 @@ static void WriteHiscoresOwnedBy(__int64 stamp)
     DecompressHiscores();
     g_hiscoreMagic.table[0][5].ownerStamp = stamp;
     g_hiscoreMagic.table1[3].ownerStamp = stamp;
+    g_hiscoreMagic.table2[19].ownerStamp = stamp;
+    g_hiscoreMagic.table3[0].ownerStamp = stamp;
     g_hiscoreMagic.table4[19].ownerStamp = stamp;
     g_hiscoreMagic.table5[1].ownerStamp = stamp;
     g_hiscoreMagic.table2[0].ownerStamp = 42;
@@ -538,16 +540,56 @@ TEST(Profile_DecodeAccount_v4_rerolls_stamp_and_repoints_hiscores)
     memset(g_hiscoreBuf, 0, 0x1000);
     LoadHiscores();
     DecompressHiscores();
-    // the entries follow the stamp the v4 -> v5 step rolled...
+    // Entries follow the final stamp after both migration steps.
     __int64 stamp = g_hiscoreMagic.table1[3].ownerStamp;
     CHECK(stamp != 777 && stamp > 0);
     CHECK_EQ_INT(g_hiscoreMagic.table[0][5].ownerStamp, stamp);
     CHECK_EQ_INT(g_hiscoreMagic.table4[19].ownerStamp, stamp);
     CHECK_EQ_INT(g_hiscoreMagic.table5[1].ownerStamp, stamp);
     CHECK_EQ_INT(g_hiscoreMagic.table2[0].ownerStamp, 42);
-    // ...but the v5 -> v6 (news layout) step rolls the account's stamp once more without
-    // repointing them (a bug: the entries no longer match the account)
-    CHECK_NE_INT(g_acc.ownerStamp, stamp);
+    // The v5 -> v6 news-layout step rolls the stamp again and follows through in hiscores.
+    CHECK_EQ_INT(g_acc.ownerStamp, stamp);
+}
+
+TEST(Profile_DecodeAccount_v5_news_layout_repoints_hiscores)
+{
+    SetUpDirs();
+    WriteHiscoresOwnedBy(555);
+    Account a = OldAccount(5);
+    CHECK(Decode(&a, ACC_V2_NEWS));
+    CHECK(g_acc.ownerStamp != 555 && g_acc.ownerStamp > 0);
+    memset(g_hiscoreBuf, 0, 0x1000);
+    LoadHiscores();
+    DecompressHiscores();
+    CHECK_EQ_INT(g_hiscoreMagic.table[0][5].ownerStamp, g_acc.ownerStamp);
+    CHECK_EQ_INT(g_hiscoreMagic.table1[3].ownerStamp, g_acc.ownerStamp);
+    CHECK_EQ_INT(g_hiscoreMagic.table2[19].ownerStamp, g_acc.ownerStamp);
+    CHECK_EQ_INT(g_hiscoreMagic.table3[0].ownerStamp, g_acc.ownerStamp);
+    CHECK_EQ_INT(g_hiscoreMagic.table4[19].ownerStamp, g_acc.ownerStamp);
+    CHECK_EQ_INT(g_hiscoreMagic.table5[1].ownerStamp, g_acc.ownerStamp);
+    CHECK_EQ_INT(g_hiscoreMagic.table2[0].ownerStamp, 42);
+}
+
+TEST(Profile_DecodeAccount_zero_stamp_keeps_unowned_hiscores_in_all_migrations)
+{
+    for (int version = 4; version <= 5; version++) {
+        SetUpDirs();
+        WriteHiscoresOwnedBy(0);
+        Account a = OldAccount(version);
+        a.ownerStamp = 0;
+        CHECK(Decode(&a, ACC_V2_NEWS));
+        CHECK(g_acc.ownerStamp > 0);
+        memset(g_hiscoreBuf, 0, 0x1000);
+        LoadHiscores();
+        DecompressHiscores();
+        CHECK_EQ_INT(g_hiscoreMagic.table[0][5].ownerStamp, 0);
+        CHECK_EQ_INT(g_hiscoreMagic.table1[3].ownerStamp, 0);
+        CHECK_EQ_INT(g_hiscoreMagic.table2[19].ownerStamp, 0);
+        CHECK_EQ_INT(g_hiscoreMagic.table3[0].ownerStamp, 0);
+        CHECK_EQ_INT(g_hiscoreMagic.table4[19].ownerStamp, 0);
+        CHECK_EQ_INT(g_hiscoreMagic.table5[1].ownerStamp, 0);
+        CHECK_EQ_INT(g_hiscoreMagic.table2[0].ownerStamp, 42);
+    }
 }
 
 TEST(Profile_DecodeAccount_v4_out_of_range_stamp_repoints_hiscores)
@@ -564,6 +606,7 @@ TEST(Profile_DecodeAccount_v4_out_of_range_stamp_repoints_hiscores)
     CHECK(stamp > 0);
     CHECK_EQ_INT(g_hiscoreMagic.table5[1].ownerStamp, stamp);
     CHECK_EQ_INT(g_hiscoreMagic.table[0][5].ownerStamp, stamp);
+    CHECK_EQ_INT(g_acc.ownerStamp, stamp);
 }
 
 // ---------------------------------------------------------------- ScanProfiles

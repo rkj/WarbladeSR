@@ -181,10 +181,8 @@ TEST(stages_gem_update_replaces_a_gem_that_fell_off)
     CHECK(g_fallingGems[0].vy >= 6 && g_fallingGems[0].vy <= 10);
 }
 
-// The respawn loop reuses the movement loop's index, so after a replacement goes into slot 0
-// the movement loop starts over from slot 1: gems before the fallen one move twice that
-// frame (a bug kept from the original).
-TEST(stages_gem_update_respawn_moves_earlier_gems_twice)
+// Replacing a fallen gem must not rewind the movement loop.
+TEST(stages_gem_update_respawn_moves_each_existing_gem_once)
 {
     GemSetUp();
     g_maxFallingGems = 3;
@@ -198,7 +196,10 @@ TEST(stages_gem_update_respawn_moves_earlier_gems_twice)
     g_fallingGems[6].animDelay = g_fallingGems[6].animTimer = 50;
     GemDropUpdate();
     CHECK_EQ_INT(g_fallingGems[0].active, 1);
-    CHECK_NEAR(g_fallingGems[1].y, 110, 1e-4);     // moved twice
+    CHECK_NEAR(g_fallingGems[0].y, -60, 1e-4);
+    CHECK_NEAR(g_fallingGems[1].animTimer, 49, 1e-4);
+    CHECK_NEAR(g_fallingGems[6].animTimer, 49, 1e-4);
+    CHECK_NEAR(g_fallingGems[1].y, 105, 1e-4);     // moved once
     CHECK_NEAR(g_fallingGems[6].y, 105, 1e-4);     // moved once
 }
 

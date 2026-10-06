@@ -89,25 +89,31 @@ def run(cmd, cwd, timeout=None):
 class Worker:
     def __init__(self, parent=None):
         self.dir = tempfile.mkdtemp(prefix="wbmutate-", dir=parent)
-        for d in ("src", "include", "tests"):
-            shutil.copytree(os.path.join(ROOT, d), os.path.join(self.dir, d),
-                            ignore=shutil.ignore_patterns("__pycache__"))
-        self.build = os.path.join(self.dir, "build")
-        cmd = ["cmake", "-S", os.path.join(self.dir, "tests"), "-B", self.build, "-G", "Ninja"]
-        if os.path.isdir(DEPS):
-            cmd.append(f"-DCMAKE_PREFIX_PATH={DEPS}")
-        code, out = run(cmd, self.dir)
-        if code:
-            raise RuntimeError("configure failed:\n" + out)
+        try:
+            for d in ("src", "include", "tests"):
+                shutil.copytree(os.path.join(ROOT, d), os.path.join(self.dir, d),
+                                ignore=shutil.ignore_patterns("__pycache__"))
+            self.build = os.path.join(self.dir, "build")
+            cmd = ["cmake", "-S", os.path.join(self.dir, "tests"), "-B", self.build, "-G", "Ninja"]
+            if os.path.isdir(DEPS):
+                cmd.append(f"-DCMAKE_PREFIX_PATH={DEPS}")
+            code, out = run(cmd, self.dir)
+            if code:
+                raise RuntimeError("configure failed:\n" + out)
+        except BaseException:
+            shutil.rmtree(self.dir, ignore_errors=True)
+            raise
 
-    def test(self, engine):
+    def test(self, engine, patterns=()):
         code, out = run(["cmake", "--build", self.build], self.dir)
         if code:
             return "build", out
         exe = "wbengine" if engine else "wbtests"
         if not os.path.exists(os.path.join(self.build, exe)):
             return "build", f"{exe} wasn't built (SDL not found?)"
-        code, out = run([os.path.join(self.build, exe), "-j", "2"], self.build, timeout=900)
+        code, out = run([os.path.join(self.build, exe), "-j", "2", *patterns], self.build, timeout=900)
+        if code not in (0, 1):
+            return "runner", out or "test runner terminated or timed out"
         return ("fail" if code else "pass"), out
 
     def mutate(self, m):
@@ -124,24 +130,34 @@ class Worker:
         with open(path, "w") as f:
             f.write(original.replace(old, new))
         try:
-            return self.test(os.path.basename(m.file).startswith("sdl"))
+            return self.test(os.path.basename(m.file).startswith("sdl"), m.expect)
         finally:
             with open(path, "w") as f:
                 f.write(original)
 
 
 _worker = None
+_worker_error = None
 
 
 def init_worker(parent):
-    global _worker
-    _worker = Worker(parent)
+    global _worker, _worker_error
+    try:
+        _worker = Worker(parent)
+    except Exception as e:
+        # Pool repeatedly spawns replacements when an initializer raises. Report the
+        # configure failure through each task so the pool can exit and clean up.
+        _worker_error = str(e)
 
 
 def check(m):
+    if _worker_error is not None:
+        return m, "build", _worker_error
     status, out = _worker.mutate(m)
     failed = re.findall(r"^FAIL (\S+)", out, re.M)
     if status == "fail":
+        if not failed:
+            return m, "runner", out[-3000:] or "test runner failed without reporting a failed test"
         missing = [e for e in m.expect if not any(e in t for t in failed)]
         if missing:
             return m, "missed", f"expected failures not seen: {missing}; failed: {failed}"
@@ -166,29 +182,28 @@ def main():
         return 0
 
     print("baseline: building and running the unmutated tests ...", flush=True)
-    base = Worker()
-    for engine in (False, True):
-        status, out = base.test(engine)
-        if status == "build" and engine and not os.path.isdir(DEPS):
-            print("  (no engine tests: run tests/build-deps.sh for them)")
-            continue
-        if status != "pass":
-            print(out[-5000:])
-            sys.exit("baseline isn't green: fix the tests first")
-    shutil.rmtree(base.dir, ignore_errors=True)
+    with tempfile.TemporaryDirectory(prefix="wbmutate-baseline-") as base_dir:
+        base = Worker(base_dir)
+        for engine in (False, True):
+            status, out = base.test(engine)
+            if status == "build" and engine and not os.path.isdir(DEPS):
+                print("  (no engine tests: run tests/build-deps.sh for them)")
+                continue
+            if status != "pass":
+                print(out[-5000:])
+                sys.exit("baseline isn't green: fix the tests first")
 
     bad = 0
-    run_dir = tempfile.mkdtemp(prefix="wbmutate-run-")   # this run's worker trees only
-    with multiprocessing.Pool(args.j, initializer=init_worker, initargs=(run_dir,)) as pool:
-        for m, status, detail in pool.imap_unordered(check, muts):
-            ok = status == "killed"
-            bad += not ok
-            print(f"{'ok  ' if ok else 'BAD '} {status:8} {m.name}" + (f"  [{detail}]" if ok and detail else ""),
-                  flush=True)
-            if not ok and detail:
-                print("     " + detail.replace("\n", "\n     "))
+    with tempfile.TemporaryDirectory(prefix="wbmutate-run-") as run_dir:
+        with multiprocessing.Pool(args.j, initializer=init_worker, initargs=(run_dir,)) as pool:
+            for m, status, detail in pool.imap_unordered(check, muts):
+                ok = status == "killed"
+                bad += not ok
+                print(f"{'ok  ' if ok else 'BAD '} {status:8} {m.name}" + (f"  [{detail}]" if ok and detail else ""),
+                      flush=True)
+                if not ok and detail:
+                    print("     " + detail.replace("\n", "\n     "))
     print(f"{len(muts)} mutations, {len(muts) - bad} killed, {bad} not")
-    shutil.rmtree(run_dir, ignore_errors=True)
     return 1 if bad else 0
 
 

@@ -549,10 +549,30 @@ expect: Profile_DecodeAccount_v5_news_layout_upgrade
 
 == profile: Decode news keeps owner stamp
 file: src/profile/account.c
+-             oldTime = g_acc.ownerStamp;
 -             g_acc.ownerStamp = MakeRandomId();
--             g_acc.medals &= 0;
-+             g_acc.medals &= 0;
++             oldTime = g_acc.ownerStamp;
 expect: Profile_DecodeAccount_v5_news_layout_upgrade
+
+== profile: Decode news does not repoint owner stamp
+file: src/profile/account.c
+-             g_acc.version = 6;
+-             oldTime = g_acc.ownerStamp;
+-             g_acc.ownerStamp = MakeRandomId();
+-             LoadHiscores();
+-             DecompressHiscores();
+-
+-             for (j = 0; j < 20; j++) {
+-                 REPOINT_OWNER_STAMP(j, oldTime)
+-             }
+-             CompressHiscores();
+-             WriteHiscoreFile();
+-
+-             g_acc.medals &= 0;
++             g_acc.version = 6;
++             g_acc.ownerStamp = MakeRandomId();
++             g_acc.medals &= 0;
+expect: Profile_DecodeAccount_v5_news_layout_repoints_hiscores
 
 == profile: news layout size
 file: src/profile/account.c
@@ -662,6 +682,12 @@ file: src/profile/account.c
 -         g_hiscoreMagic.table5[idx].ownerStamp = g_acc.ownerStamp;
 +         g_hiscoreMagic.table5[idx].ownerStamp = g_hiscoreMagic.table5[idx].ownerStamp;
 expect: Profile_DecodeAccount_v4_rerolls_stamp_and_repoints_hiscores
+
+== profile: zero owner stamps are not claimed
+file: src/profile/account.c
+-     if ((oldStamp) != 0) {
++     if (1) {
+expect: Profile_DecodeAccount_zero_stamp_keeps_unowned_hiscores_in_all_migrations
 
 == profile: Decode v4 fixup no repoint
 file: src/profile/account.c
