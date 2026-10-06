@@ -731,7 +731,7 @@ void ShowSecretsInOneGame(int id)
     if (id != -1) {
         UnpackAccount(id);
         g_shownStat = g_acc.secretsInOneGame;
-        sprintf(g_logBuf, "%d", (__int64)g_acc.secretsInOneGame);
+        sprintf(g_logBuf, "%lld", (__int64)g_acc.secretsInOneGame);
         ClearAccount();
     }
 }
@@ -818,7 +818,7 @@ void ShowHighestLevelReached(int id)
     if (id != -1) {
         UnpackAccount(id);
         g_shownStat = g_acc.highestLevel;
-        sprintf(g_logBuf, "%d", (__int64)g_acc.highestLevel);
+        sprintf(g_logBuf, "%lld", (__int64)g_acc.highestLevel);
         ClearAccount();
     }
 }
@@ -843,7 +843,7 @@ void ShowTotalLevelsPlayed(int id)
     if (id != -1) {
         UnpackAccount(id);
         g_shownStat = g_acc.totalLevelsPlayed;
-        sprintf(g_logBuf, "%d", (__int64)g_acc.totalLevelsPlayed);
+        sprintf(g_logBuf, "%lld", (__int64)g_acc.totalLevelsPlayed);
         ClearAccount();
 
         if (g_gameMode != MODE_TIME_TRIAL) {
@@ -884,7 +884,7 @@ void ShowTotalGamesPlayed(int id)
     if (id != -1) {
         UnpackAccount(id);
         g_shownStat = g_acc.gamesPlayed;
-        sprintf(g_logBuf, "%d", (__int64)g_acc.gamesPlayed);
+        sprintf(g_logBuf, "%lld", (__int64)g_acc.gamesPlayed);
         ClearAccount();
     }
 }
@@ -949,7 +949,7 @@ void FormatHighestMoney(int profile)
         if (g_profileReadOnly && g_shownStat > 99999)
             sprintf(g_logBuf, "???");
         else
-            sprintf(g_logBuf, "%d", (__int64)g_acc.highestMoney);
+            sprintf(g_logBuf, "%lld", (__int64)g_acc.highestMoney);
         ClearAccount();
     }
 }
