@@ -584,10 +584,10 @@ expect: Stats_FormatHighestMoney_masks_big_amounts_on_read_only_profiles
 file: src/profile/stats.c
 -             sprintf(g_logBuf, "???");
 -         else
--             sprintf(g_logBuf, "%d", (__int64)g_acc.highestMoney);
-+             sprintf(g_logBuf, "%d", (__int64)g_acc.highestMoney);
+-             sprintf(g_logBuf, "%lld", (__int64)g_acc.highestMoney);
++             sprintf(g_logBuf, "%lld", (__int64)g_acc.highestMoney);
 +         else
-+             sprintf(g_logBuf, "%d", (__int64)g_acc.highestMoney);
++             sprintf(g_logBuf, "%lld", (__int64)g_acc.highestMoney);
 expect: Stats_FormatHighestMoney_masks_big_amounts_on_read_only_profiles
 
 # ---- secrets and completion ----
@@ -2298,3 +2298,9 @@ expect: Stats_medal_sequence_restarts_on_a_wrong_medal
 +                     g_acc.medalStep = MEDAL_BONUS_RATIO;
 +                 else
 +                     g_acc.medalStep = MEDAL_SPEED_STREAK;
+
+== stats: highest money text truncates to 32 bits
+file: src/profile/stats.c
+-             sprintf(g_logBuf, "%lld", (__int64)g_acc.highestMoney);
++             sprintf(g_logBuf, "%d", (int)(__int64)g_acc.highestMoney);
+expect: Stats_FormatHighestMoney_preserves_64_bit_amounts

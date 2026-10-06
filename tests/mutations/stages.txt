@@ -2721,8 +2721,8 @@ expect: stages_memory_cursor_blinks_through_six_frames
 
 == stages: memory congratulations text
 file: src/game/stages/memorystation.c
--         sprintf(g_logBuf, "%d POINTS BONUS", g_save.players[g_curPlayer].memoryBonus);
-+         sprintf(g_logBuf, "%d POINTS BONUS", g_save.players[g_curPlayer].memoryBonus / 2);
+-         sprintf(g_logBuf, "%lld POINTS BONUS", g_save.players[g_curPlayer].memoryBonus);
++         sprintf(g_logBuf, "%lld POINTS BONUS", g_save.players[g_curPlayer].memoryBonus / 2);
 expect: stages_memory_congratulations_show_the_bonus
 
 == stages: memory congratulations keep the pointer
@@ -2730,4 +2730,10 @@ file: src/game/stages/memorystation.c
 -     if (g_memoryDone != 0) {
 -         g_buttonsOn = 0;
 +     if (g_memoryDone != 0) {
+expect: stages_memory_congratulations_show_the_bonus
+
+== stages: memory bonus truncates to 32 bits
+file: src/game/stages/memorystation.c
+-         sprintf(g_logBuf, "%lld POINTS BONUS", g_save.players[g_curPlayer].memoryBonus);
++         sprintf(g_logBuf, "%d POINTS BONUS", (int)g_save.players[g_curPlayer].memoryBonus);
 expect: stages_memory_congratulations_show_the_bonus

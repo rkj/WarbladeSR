@@ -628,6 +628,16 @@ TEST(Stats_highest_money_keeps_the_best)
     CHECK_NEAR(Load(0)->highestMoney, 123457.0, 0);
 }
 
+TEST(Stats_FormatHighestMoney_preserves_64_bit_amounts)
+{
+    Reset();
+    g_acc.highestMoney = 7500000000.0;
+    PackAccount(0);
+    FormatHighestMoney(0);
+    CHECK_STR(g_logBuf, "7500000000");
+    CHECK_EQ_INT(g_shownStat, 7500000000LL);
+}
+
 TEST(Stats_FormatHighestMoney_masks_big_amounts_on_read_only_profiles)
 {
     g_profileReadOnly = 1;

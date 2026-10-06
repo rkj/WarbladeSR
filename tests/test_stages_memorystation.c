@@ -1011,8 +1011,8 @@ TEST(stages_memory_congratulations_show_the_bonus)
     g_memoryIntro = 0;
     g_memoryDone = 1;
     g_buttonsOn = 1;
-    P0.memoryBonus = 75000;
+    P0.memoryBonus = 7500000000LL;
     MemoryStationText();
-    CHECK_STR(g_logBuf, "75000 POINTS BONUS");
+    CHECK_STR(g_logBuf, "7500000000 POINTS BONUS");
     CHECK_EQ_INT(g_buttonsOn, 0);
 }

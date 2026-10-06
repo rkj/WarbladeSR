@@ -1253,7 +1253,7 @@ void EmptyScreenStub()
     sprintf(g_logBuf, "CASH LEFT                                           "); \
     DrawMenuText(g_logBuf, POS_CENTERED, g_textAutoY, 6); \
     len = Int64ToStrGrouped(p.cash, g_scoreBuf); \
-    sprintf(g_logBuf, "                         %5d X 100 =              ", p.cash / 100 cashExtra); \
+    sprintf(g_logBuf, "                         %5lld X 100 =              ", p.cash / 100 cashExtra); \
     CopyStrAt(g_logBuf, g_scoreBuf, 13 - len + 39, len); \
     DrawMenuText(g_logBuf, POS_CENTERED, g_curY, 6); \
     g_textCursorY += 10; \
@@ -1275,7 +1275,7 @@ void EmptyScreenStub()
     sprintf(g_logBuf, "PERFECTS                                            "); \
     DrawMenuText(g_logBuf, POS_CENTERED, g_textAutoY, 6); \
     len = Int64ToStrGrouped(p.perfectsBonus, g_scoreBuf); \
-    sprintf(g_logBuf, "                       %3d X 100.000 =              ", p.perfects); \
+    sprintf(g_logBuf, "                       %3lld X 100.000 =              ", p.perfects); \
     CopyStrAt(g_logBuf, g_scoreBuf, 13 - len + 39, len); \
     DrawMenuText(g_logBuf, POS_CENTERED, g_curY, 6); \
     g_textCursorY += 10; \

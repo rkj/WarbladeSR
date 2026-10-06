@@ -445,9 +445,9 @@ bool DecodeAccount(void *buf, int profile, int len)
     }
     if (res == 0) {
 
-        // v0 -> v1: high scores were 32-bit; widen them to __int64.
+        // v0 -> v1: high scores were doubles; convert them to the current integer fields.
         if (g_acc.version == 0) {
-            memcpy(&g_accV0, &g_acc, SIZEOF_ACCOUNT);
+            memcpy(&g_accV0, &g_acc, sizeof g_accV0);
             g_acc.highScore = (__int64)g_accV0.highScore;
             g_acc.meteorstormHighScore = (__int64)g_accV0.meteorstormHighScore;
             g_acc.timeTrialHighScore = (__int64)g_accV0.timeTrialHighScore;

@@ -97,6 +97,18 @@ static bool Decode(const Account *acc, int len)
     return DecodeAccount(buf, 0, len);
 }
 
+// Compresses the v0 score-layout prefix inside a known account-file container size.
+static bool DecodeV0Account(const void *account)
+{
+    static unsigned char buf[ACC_V2_NEWS];
+    uLongf packed = sizeof buf;
+    memset(buf, 0, sizeof buf);
+    CHECK_EQ_INT(compress(buf, &packed, account, sizeof(AccountV0)), Z_OK);
+    // Historical files are read using their padded container length; remaining bytes are 0.
+    g_accSizes[0] = ACC_V2_NEWS;
+    return DecodeAccount(buf, 0, ACC_V2_NEWS);
+}
+
 // An account of version `version` with recognizable fields.
 static Account OldAccount(int version)
 {
@@ -500,8 +512,43 @@ TEST(Profile_DecodeAccount_v2_resets_stats_and_caps_levels_played)
     CHECK_EQ_INT(g_acc.bestLevelTime, 999999999);
 }
 
-// (A v0 account isn't tested: its step copies 0x40d0 bytes into the 0x1b48-byte g_accV0,
-// which overflows it; _FORTIFY_SOURCE aborts there.)
+TEST(Profile_DecodeAccount_v0_migrates_compressed_legacy_account_without_neighbor_overwrite)
+{
+    SetUpDirs();
+    static Account image;
+    memset(&image, 0, sizeof image);
+    snprintf(image.id, sizeof image.id, "OLDV0");
+    snprintf(image.name, sizeof image.name, "LEGACYV0");
+    snprintf(image.password, sizeof image.password, "v0-pass");
+    image.created.year = 2001;
+    image.version = 0;
+    // The v0 high-score fields were doubles at these same offsets.
+    double oldHighScore = 12345.0;
+    double oldMeteorstormScore = 23456.0;
+    double oldTimeTrialScore = 34567.0;
+    double oldLevel100Score = 45678.0;
+    memcpy(&image.highScore, &oldHighScore, sizeof oldHighScore);
+    memcpy(&image.meteorstormHighScore, &oldMeteorstormScore, sizeof oldMeteorstormScore);
+    memcpy(&image.timeTrialHighScore, &oldTimeTrialScore, sizeof oldTimeTrialScore);
+    memcpy(&image.level100HighScore, &oldLevel100Score, sizeof oldLevel100Score);
+
+    // g_menuEntries follows g_accV0 in the test binary's globals; a sentinel here detects
+    // copying the full current Account over the smaller legacy object even without fortify.
+    memset(g_menuEntries, 0x5a, sizeof g_menuEntries);
+    CHECK(DecodeV0Account(&image));
+    CHECK_EQ_INT(g_acc.version, 7);
+    CHECK_STR(g_acc.id, "OLDV0");
+    CHECK_STR(g_acc.name, "LEGACYV0");
+    CHECK_STR(g_acc.password, "v0-pass");
+    CHECK_EQ_INT(g_acc.created.year, 2001);
+    CHECK_NEAR(g_accV0.highScore, oldHighScore, 0.0);
+    CHECK_NEAR(g_accV0.meteorstormHighScore, oldMeteorstormScore, 0.0);
+    CHECK_NEAR(g_accV0.timeTrialHighScore, oldTimeTrialScore, 0.0);
+    CHECK_NEAR(g_accV0.level100HighScore, oldLevel100Score, 0.0);
+    CHECK_EQ_INT(g_menuEntries[0].active, 0x5a5a5a5a);
+    CHECK_EQ_INT(g_menuEntries[84].width, 0x5a5a5a5a);
+}
+
 TEST(Profile_DecodeAccount_v1_walks_the_whole_chain)
 {
     SetUpDirs();
