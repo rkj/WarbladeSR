@@ -491,8 +491,9 @@ TEST(Flow_SpawnMoneySucker_not_for_poor_players_or_on_boss_levels)
     g_frameDt = 100;
     g_time = 300000;
     g_save.players[0].money = 750;
-    for (int i = 0; i < 100; i++)
-        SpawnMoneySucker();
+    // Make every random gate pass if the 750 threshold is accidentally inclusive.
+    g_rngX = g_rngY = g_rngZ = g_rngW = g_rngT = 0;
+    SpawnMoneySucker();
     CHECK_EQ_INT(g_enemies[0][0].active, 0);
     g_save.players[0].money = 2000000000;
     g_curLevelData.type = LEVEL_BOSS;
@@ -563,6 +564,13 @@ TEST(Flow_NearPlayerFireBoost_cuts_values_near_the_player)
         CHECK_EQ_INT(NearPlayerFireBoost(150, 400), 400);
     }
     CHECK(seen[1] > 0 && seen[0] > 0 && seen[2] > 0 && seen[3] > 0);
+
+    // Out-of-range enemies must leave both the value and the shared random stream alone.
+    SeedRand(1234);
+    const unsigned before[] = {g_rngX, g_rngY, g_rngZ, g_rngW, g_rngT};
+    CHECK_EQ_INT(NearPlayerFireBoost(150, 400), 400);
+    const unsigned after[] = {g_rngX, g_rngY, g_rngZ, g_rngW, g_rngT};
+    CHECK_MEM(after, before, sizeof before);
 }
 
 // ---- hurry up ----

@@ -4308,7 +4308,7 @@ file: src/ui/controls.c
 -             g_keysChanged = 1;
 +         if (g_cfg.left[player] == g_cfg.rocket[player]) {
 +             g_cfg.rocket[player] = K_VK_Q;
-expect: ui_FixDuplicateKeys_resets_the_later_key_to_Q
+expect: ui_FixDuplicateKeys_flags_a_single_keyboard_collision
 
 == ui: FixDuplicateKeys resets the wrong key
 file: src/ui/controls.c

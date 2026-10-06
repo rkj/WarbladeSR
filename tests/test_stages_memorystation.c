@@ -212,6 +212,8 @@ TEST(stages_memory_first_pick_turns_the_card)
 TEST(stages_memory_matching_pair_is_taken)
 {
     Grid(CARD_SCORE_1000);
+    // Leave another same-type pair face down; matching the open pair must not consume it.
+    g_cards[2][0].type = g_cards[3][0].type = CARD_SCORE_1000;
     Pick(0, 0);
     Pick(1, 0);
     CHECK_EQ_INT(P0.tries, 1);
@@ -225,6 +227,8 @@ TEST(stages_memory_matching_pair_is_taken)
     MemoryBonusUpdate();
     CHECK_EQ_INT(g_cards[0][0].active, 0);
     CHECK_EQ_INT(g_cards[1][0].active, 0);
+    CHECK_EQ_INT(g_cards[2][0].active, 1);
+    CHECK_EQ_INT(g_cards[3][0].active, 1);
     CHECK_EQ_INT(g_memPendingCardType, -1);
     CHECK_EQ_INT(P0.score, 1000);
 }
@@ -604,10 +608,11 @@ TEST(stages_memory_gem_card_adds_two_gems)
 TEST(stages_memory_hundredth_gem_starts_a_gem_drop)
 {
     Grid(CARD_GEM_A);
-    P0.gems = GEM_BASE + GEM_STEP * 99;
+    P0.gems = GEM_BASE + GEM_STEP * 98;
     g_superGemDrop = 0;
     MatchPair();
     CHECK_EQ_INT(g_state, STATE_GEM_DROP);
+    CHECK_EQ_INT(P0.gems, GEM_BASE + GEM_STEP * 100);
     CHECK_EQ_INT(P0.score, 0);
     CHECK_EQ_INT(g_superGemDrop, 0);
     CHECK_STR(g_alertMsg, "G E M   D R O P");
@@ -663,6 +668,23 @@ TEST(stages_memory_spelling_EXTRA_gives_a_life)
                          P0.extraLetterA, 0);
         CHECK_EQ_INT(FakePlayCount("fanfare"), missing + 1);
     }
+}
+
+TEST(stages_memory_spelling_EXTRA_requires_A)
+{
+    Grid(CARD_LETTER_E);
+    P0.extraLetterE = 0;
+    P0.extraLetterX = P0.extraLetterT = P0.extraLetterR = 1;
+    P0.extraLetterA = 0;
+    P0.lives = 30;
+    MatchPair();
+    CHECK_EQ_INT(P0.lives, 30);
+    CHECK_EQ_INT(P0.extraLetterE, 1);
+    CHECK_EQ_INT(P0.extraLetterX, 1);
+    CHECK_EQ_INT(P0.extraLetterT, 1);
+    CHECK_EQ_INT(P0.extraLetterR, 1);
+    CHECK_EQ_INT(P0.extraLetterA, 0);
+    CHECK_EQ_INT(FakePlayCount("fanfare"), 0);
 }
 
 TEST(stages_memory_spelling_EXTRA_with_full_hangar_gives_armour_or_score)

@@ -136,6 +136,18 @@ TEST(ui_FixDuplicateKeys_leaves_distinct_keys)
     CHECK_EQ_INT(g_cfg.rocket[0], K_VK_SPACE);
 }
 
+TEST(ui_FixDuplicateKeys_flags_a_single_keyboard_collision)
+{
+    DistinctKeys(0);
+    g_cfg.playerKeys[0][0] = K_VK_1;
+    g_cfg.menuKeys[0][0] = K_VK_F1;
+    g_cfg.rocket[0] = g_cfg.left[0];
+    g_keysChanged = 0;
+    FixDuplicateKeys(0);
+    CHECK_EQ_INT(g_cfg.rocket[0], K_VK_Q);
+    CHECK_EQ_INT(g_keysChanged, 1);
+}
+
 TEST(ui_FixDuplicateKeys_resets_the_later_key_to_Q)
 {
     DistinctKeys(1);

@@ -385,21 +385,23 @@ int LoadAccount(int profile)
     return r;
 }
 
-// Repoints hiscore-table entry `idx`'s ownerStamp to the account's new ownerStamp, across
-// all 6 hiscore tables, if it currently matches `oldStamp`.
+// Repoints matching entries across all 6 hiscore tables. Stamp zero means unowned and must
+// stay zero; non-zero stamps, including invalid negative legacy stamps, still follow migration.
 #define REPOINT_OWNER_STAMP(idx, oldStamp)                                \
-    if (g_hiscoreMagic.table[0][idx].ownerStamp == (oldStamp))            \
-        g_hiscoreMagic.table[0][idx].ownerStamp = g_acc.ownerStamp;       \
-    if (g_hiscoreMagic.table1[idx].ownerStamp == (oldStamp))              \
-        g_hiscoreMagic.table1[idx].ownerStamp = g_acc.ownerStamp;         \
-    if (g_hiscoreMagic.table2[idx].ownerStamp == (oldStamp))              \
-        g_hiscoreMagic.table2[idx].ownerStamp = g_acc.ownerStamp;         \
-    if (g_hiscoreMagic.table3[idx].ownerStamp == (oldStamp))              \
-        g_hiscoreMagic.table3[idx].ownerStamp = g_acc.ownerStamp;         \
-    if (g_hiscoreMagic.table4[idx].ownerStamp == (oldStamp))              \
-        g_hiscoreMagic.table4[idx].ownerStamp = g_acc.ownerStamp;         \
-    if (g_hiscoreMagic.table5[idx].ownerStamp == (oldStamp))              \
-        g_hiscoreMagic.table5[idx].ownerStamp = g_acc.ownerStamp;
+    if ((oldStamp) != 0) {                                                \
+        if (g_hiscoreMagic.table[0][idx].ownerStamp == (oldStamp))        \
+            g_hiscoreMagic.table[0][idx].ownerStamp = g_acc.ownerStamp;   \
+        if (g_hiscoreMagic.table1[idx].ownerStamp == (oldStamp))          \
+            g_hiscoreMagic.table1[idx].ownerStamp = g_acc.ownerStamp;     \
+        if (g_hiscoreMagic.table2[idx].ownerStamp == (oldStamp))          \
+            g_hiscoreMagic.table2[idx].ownerStamp = g_acc.ownerStamp;     \
+        if (g_hiscoreMagic.table3[idx].ownerStamp == (oldStamp))          \
+            g_hiscoreMagic.table3[idx].ownerStamp = g_acc.ownerStamp;     \
+        if (g_hiscoreMagic.table4[idx].ownerStamp == (oldStamp))          \
+            g_hiscoreMagic.table4[idx].ownerStamp = g_acc.ownerStamp;     \
+        if (g_hiscoreMagic.table5[idx].ownerStamp == (oldStamp))          \
+            g_hiscoreMagic.table5[idx].ownerStamp = g_acc.ownerStamp;     \
+    }
 
 // Copies the 4 "AltN" alternate-binding fields (N = 0..3) for `prefix` from g_accV2 into
 // g_acc (used by the v5->v6 AccountV2 field-by-field copy below).
@@ -711,7 +713,17 @@ bool DecodeAccount(void *buf, int profile, int len)
             g_acc.highestMoney = 0;
             g_acc.secretsInOneGame = 0;
             g_acc.version = 6;
+            oldTime = g_acc.ownerStamp;
             g_acc.ownerStamp = MakeRandomId();
+            LoadHiscores();
+            DecompressHiscores();
+
+            for (j = 0; j < 20; j++) {
+                REPOINT_OWNER_STAMP(j, oldTime)
+            }
+            CompressHiscores();
+            WriteHiscoreFile();
+
             g_acc.medals &= 0;
             g_acc.medalStep = -1;
 

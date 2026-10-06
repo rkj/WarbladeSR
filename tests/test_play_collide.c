@@ -181,11 +181,8 @@ TEST(Play_ItemsVsPlayer_in_mirror_mode_either_ship_collects)
     CHECK(frames > 1);
 }
 
-TEST(Play_ItemsVsBothPlayers_checks_player_2_only_when_it_goes_first)
+TEST(Play_ItemsVsBothPlayers_checks_both_players_in_either_order)
 {
-    // Documents a bug: after checking g_curPlayer = RandRange(0, 2), the switch to the other
-    // player is "if (0) 1; if (1) 0;", which always lands on player 1 (index 0). When the roll
-    // is 0, player 1 is checked twice and player 2 never collects.
     StartPlay();
     g_gameMode = MODE_DUAL;
     InitPlayer(1);
@@ -201,31 +198,31 @@ TEST(Play_ItemsVsBothPlayers_checks_player_2_only_when_it_goes_first)
         RestoreRng(r);
         ItemsVsBothPlayers();
         CHECK_EQ_INT(g_curPlayer, 0);
-        if (first == 1) {
-            CHECK_EQ_INT(g_items[0].alive, 0);
-            CHECK_EQ_INT(PL1.lives, lives + 4);
-        } else {
-            CHECK_EQ_INT(g_items[0].alive, 1);
-            CHECK_EQ_INT(PL1.lives, lives);
-        }
+        CHECK_EQ_INT(g_items[0].alive, 0);
+        CHECK_EQ_INT(PL1.lives, lives + 4);
         seen[first]++;
     }
     CHECK(seen[0] > 0 && seen[1] > 0);
 }
 
-TEST(Play_ItemsVsBothPlayers_player_1_always_collects)
+TEST(Play_ItemsVsBothPlayers_randomizes_simultaneous_pickups)
 {
     StartPlay();
     g_gameMode = MODE_DUAL;
     InitPlayer(1);
-    PL1.x = 500;
+    PL1.x = PL0.x;
+    int expected[2] = {0};
     for (int round = 0; round < 10; round++) {
         AddItem(0, ITEM_EXTRA_TIME, 310, 540, 20, 20);
+        Rng r = SaveRng();
+        int first = RandRange(0, 2);
+        RestoreRng(r);
         ItemsVsBothPlayers();
         CHECK_EQ_INT(g_items[0].alive, 0);
+        expected[first]++;
+        CHECK_EQ_INT(PL0.pickupCount, expected[0]);
+        CHECK_EQ_INT(PL1.pickupCount, expected[1]);
     }
-    CHECK_EQ_INT(PL0.pickupCount, 10);
-    CHECK_EQ_INT(PL1.pickupCount, 0);
 }
 
 // ---------------------------------------------------------------- enemy shots vs the player
@@ -386,10 +383,8 @@ TEST(Play_BulletsVsPlayer_a_hit_on_the_ship_costs_a_shield_instead_of_a_life)
     CHECK_EQ_INT(PL0.dead, 0);
 }
 
-TEST(Play_BulletsVsBothPlayers_skips_player_1_when_player_2_goes_first)
+TEST(Play_BulletsVsBothPlayers_checks_both_players_in_either_order)
 {
-    // Documents a bug: after checking g_curPlayer = RandRange(0, 2), the switch is only
-    // "if (0) 1", so when the roll is 1, player 2 is checked twice and player 1 not at all.
     StartPlay();
     g_gameMode = MODE_DUAL;
     InitPlayer(1);
@@ -406,9 +401,10 @@ TEST(Play_BulletsVsBothPlayers_skips_player_1_when_player_2_goes_first)
         int first = RandRange(0, 2);
         RestoreRng(r);
         BulletsVsBothPlayers();
+        CHECK_EQ_INT(PL0.armour, ARMOUR0);
         CHECK_EQ_INT(PL1.armour, ARMOUR0);
-        CHECK_EQ_INT(PL0.armour, first == 0 ? ARMOUR0 : ARMOUR0 + ARMOUR_STEP);
-        CHECK_EQ_INT(g_levelObj[0].active, first == 0 ? 0 : 1);
+        CHECK_EQ_INT(g_levelObj[0].active, 0);
+        CHECK_EQ_INT(g_levelObj[1].active, 0);
         CHECK_EQ_INT(g_curPlayer, 0);
         seen[first]++;
     }
@@ -748,6 +744,9 @@ TEST(Play_ShieldGrabEnemies_with_both_slots_full_makes_debris)
     ShieldGrabEnemies();
     CHECK_EQ_INT(g_enemies[0][3].type, ENEMY_DEBRIS);
     CHECK_EQ_INT(PL0.shieldLIdx, 10);
+    CHECK_EQ_INT(PL0.shieldL, 1);
+    CHECK_EQ_INT(PL0.shieldRIdx, 11);
+    CHECK_EQ_INT(PL0.shieldR, 1);
     CHECK_EQ_INT(PL0.score, 2500);
     CHECK_EQ_INT(PL0.killed, 1);
     CHECK(g_enemies[0][3].debrisVelY >= -10 && g_enemies[0][3].debrisVelY < -6);
@@ -821,9 +820,8 @@ TEST(Play_ShieldGrabEnemies_needs_the_scoop_and_skips_wrappers)
     CHECK_EQ_INT(PL0.shieldL, 1);
 }
 
-TEST(Play_ShieldGrabEnemiesBothPlayers_skips_player_1_when_player_2_goes_first)
+TEST(Play_ShieldGrabEnemiesBothPlayers_checks_both_players_in_either_order)
 {
-    // The same bug as BulletsVsBothPlayers: a roll of 1 checks player 2 twice.
     StartPlay();
     g_gameMode = MODE_DUAL;
     InitPlayer(1);
@@ -844,7 +842,9 @@ TEST(Play_ShieldGrabEnemiesBothPlayers_skips_player_1_when_player_2_goes_first)
         CHECK_EQ_INT(PL1.shieldL, 1);
         CHECK_EQ_INT(PL1.shieldLIdx, 4);
         CHECK_EQ_INT(g_enemies[0][4].ownerPlayer, 1);
-        CHECK_EQ_INT(PL0.shieldL, first == 0);
+        CHECK_EQ_INT(PL0.shieldL, 1);
+        CHECK_EQ_INT(PL0.shieldLIdx, 3);
+        CHECK_EQ_INT(g_enemies[0][3].ownerPlayer, 0);
         CHECK_EQ_INT(g_curPlayer, 0);
         seen[first]++;
     }
@@ -894,19 +894,17 @@ TEST(Play_BoxOverlap_tests_the_rect_against_the_box_list)
     CHECK(!BoxOverlap(0, 0, 0, 150, 120, 160, 130));
 }
 
-TEST(Play_BoxOverlap_set_1_ends_at_its_own_terminator_but_tests_set_0)
+TEST(Play_BoxOverlap_set_1_uses_its_own_shifted_boxes_and_terminator)
 {
-    // Documents a quirk kept from the original: set 1 stops at g_boxesB's terminator but
-    // tests against g_boxesA's boxes.
     StartPlay();
     g_boxesA[0] = (Box){100, 100, 200, 150};
     g_boxesA[1] = (Box){-1, 0, 0, 0};
     g_boxesB[0] = (Box){0, 0, 10, 10};
     g_boxesB[1] = (Box){-1, 0, 0, 0};
-    CHECK(BoxOverlap(1, 0, 0, 150, 120, 160, 130));
-    CHECK(!BoxOverlap(1, 0, 0, 2, 2, 5, 5));
-    g_boxesB[0].x0 = -1;
+    CHECK(BoxOverlap(1, 150, 120, 155, 123, 160, 130));
     CHECK(!BoxOverlap(1, 0, 0, 150, 120, 160, 130));
+    g_boxesB[0].x0 = -1;
+    CHECK(!BoxOverlap(1, 150, 120, 155, 123, 160, 130));
     CHECK(!BoxOverlap(2, 0, 0, 150, 120, 160, 130));
 }
 

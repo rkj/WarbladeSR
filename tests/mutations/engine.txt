@@ -1772,3 +1772,15 @@ file: src/core/sdl.c
 + void ShowPointer(void) { SDL_HideCursor(); }
 + void HidePointer(void) { SDL_ShowCursor(); }
 expect: engine_HidePointer_and_ShowPointer
+
+== engine: virtual pad leaks to player two
+file: src/core/sdl.c
+-     bits = pad == 0 ? s_virtualPad : 0;
++     bits = s_virtualPad;
+expect: engine_SysPadState_virtual_controls_belong_only_to_player_one
+
+== engine: virtual pad ignores updates
+file: src/core/sdl.c
+-     s_virtualPad = bits;
++     s_virtualPad |= bits;
+expect: engine_SysPadState_virtual_controls_belong_only_to_player_one

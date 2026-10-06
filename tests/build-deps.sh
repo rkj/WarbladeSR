@@ -4,6 +4,7 @@
 # audio), so they build and run without X11, ALSA or a display. The same tags as
 # build-linux.sh. The game-logic tests don't need these.
 #
+#   WB_TEST_DEPS                         alternate build/install folder
 #   SDL_SRC, SDL_IMAGE_SRC, SDL_MIXER_SRC   existing source trees to use instead of cloning
 set -eu
 
@@ -12,7 +13,7 @@ SDL_IMAGE_TAG=release-3.4.6
 SDL_MIXER_TAG=release-3.2.4
 
 root=$(cd "$(dirname "$0")/.." && pwd)
-deps="$root/build/deps-test"
+deps=${WB_TEST_DEPS:-"$root/build/deps-test"}
 prefix="$deps/prefix"
 mkdir -p "$deps"
 
@@ -42,7 +43,7 @@ sdl_mixer=${SDL_MIXER_SRC:-$(fetch SDL_mixer $SDL_MIXER_TAG https://github.com/l
 
 lib sdl3 "$sdl" -DSDL_SHARED=OFF -DSDL_STATIC=ON -DSDL_TESTS=OFF -DSDL_TEST_LIBRARY=OFF \
     -DSDL_EXAMPLES=OFF -DSDL_GPU=OFF -DSDL_CAMERA=OFF -DSDL_HAPTIC=OFF -DSDL_SENSOR=OFF \
-    -DSDL_DIALOG=OFF -DSDL_TRAY=OFF -DSDL_HIDAPI=OFF -DSDL_JOYSTICK=ON \
+    -DSDL_DIALOG=OFF -DSDL_TRAY=OFF -DSDL_HIDAPI=ON -DSDL_JOYSTICK=ON -DSDL_VIRTUAL_JOYSTICK=ON \
     -DSDL_X11=OFF -DSDL_WAYLAND=OFF -DSDL_KMSDRM=OFF -DSDL_OPENGL=OFF -DSDL_OPENGLES=OFF \
     -DSDL_VULKAN=OFF -DSDL_ALSA=OFF -DSDL_PULSEAUDIO=OFF -DSDL_PIPEWIRE=OFF -DSDL_JACK=OFF \
     -DSDL_SNDIO=OFF -DSDL_OSS=OFF -DSDL_DUMMYVIDEO=ON -DSDL_OFFSCREEN=ON -DSDL_DUMMYAUDIO=ON \

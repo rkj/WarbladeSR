@@ -272,11 +272,12 @@ file: src/game/level.c
 + g_alienGfxSlots[slot].blk[s].aWidth = g_frameAY2;
 expect: Flow_PackLevelData_scans_the_hit_mask_for_frame_rects
 
-== flow: LoadHma name fixed
+== flow: LoadHma uses the wrong base name
 file: src/gfx/resources.c
-- sprintf(levelname, "%s.hma", levelname);
-+ sprintf(levelname + StrLen(levelname), ".hma");
-expect: Flow_PackLevelData_finds_no_hit_mask_under_its_real_name
+- StrToLowerN(name, levelname, (int)sizeof(levelname));
++ StrToLowerN(".hma", levelname, (int)sizeof(levelname));
+expect: Flow_PackLevelData_finds_a_hit_mask_under_its_real_name
+expect: ui_LoadHma_reads_a_lowercase_mask_with_the_requested_size
 
 # ---- level.c: frame rects ----
 

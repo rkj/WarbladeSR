@@ -481,10 +481,9 @@ void DrawRankPromoBanner();
 
 // (0x59d710)
 unsigned int GetFlagMask(unsigned char joy);
-// defined `void` (main.c); player.c reads the value the inner PTK call leaves in eax, so it declares its own `int` version
-void GetJoyX(unsigned char joy);
-// as GetJoyX
-void GetJoyY(unsigned char joy);
+// Returns the requested legacy joystick axis.
+long GetJoyX(unsigned char joy);
+long GetJoyY(unsigned char joy);
 void OpenCreateProfileWin();
 void OnFocusChange(bool focused);
 

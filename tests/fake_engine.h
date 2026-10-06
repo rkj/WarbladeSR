@@ -16,6 +16,8 @@ typedef struct FakeEngine {
     SysDate localDate;          // SysLocalDate/SysUtcDate
     long long fileTime;         // SysFileTimeNow
     bool joyPresent[2];
+    unsigned padBits[2], virtualPad;
+    long joyX[2], joyY[2];
     float imageW, imageH;       // the size of every image ImgLoad returns (default 64 x 64)
     bool imageLoadFails;        // ImgLoad returns NULL
     bool sampleLoadFails;       // SampleLoad returns 0

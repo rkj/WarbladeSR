@@ -1087,8 +1087,8 @@ expect: stages_gem_update_replaces_a_gem_that_fell_off
 
 == stages: gem replacement speed
 file: src/game/stages/gemdrop.c
--                             g_fallingGems[i].vy = RandFloat(6.0f, 10.0f);
-+                             g_fallingGems[i].vy = RandFloat(6.0f, 12.0f);
+-                             g_fallingGems[j].vy = RandFloat(6.0f, 10.0f);
++                             g_fallingGems[j].vy = RandFloat(6.0f, 12.0f);
 expect: stages_gem_update_replaces_a_gem_that_fell_off
 
 == stages: gem no replacement
@@ -1097,19 +1097,12 @@ file: src/game/stages/gemdrop.c
 +                 if (g_pickupCount < (int)g_maxFallingGems - 1) {
 expect: stages_gem_update_replaces_a_gem_that_fell_off
 
-== stages: gem respawn with its own index
+== stages: gem respawn reuses movement index
 file: src/game/stages/gemdrop.c
--                     for (i = 0; i < MAX_FALLING_GEMS; i++) {
--                         if (g_fallingGems[i].active == 0) {
--                             g_fallingGems[i].active = 1;
--                             r = RandRange(0, 100);
--                             g_fallingGems[i].type = 0x50;
-+                     for (int i = 0; i < MAX_FALLING_GEMS; i++) {
-+                         if (g_fallingGems[i].active == 0) {
-+                             g_fallingGems[i].active = 1;
-+                             r = RandRange(0, 100);
-+                             g_fallingGems[i].type = 0x50;
-expect: stages_gem_update_respawn_moves_earlier_gems_twice
+-                     for (int j = 0; j < MAX_FALLING_GEMS; j++) {
++                     for (i = 0; i < MAX_FALLING_GEMS; i++) {
++                         int j = i;
+expect: stages_gem_update_respawn_moves_each_existing_gem_once
 
 == stages: gem distance ignores frame time
 file: src/game/stages/gemdrop.c
@@ -2157,7 +2150,7 @@ file: src/game/stages/memorystation.c
 -                     if (g_cards[matchRow][matchCol].open == 0 &&
 -                         g_cards[matchRow][matchCol].type == g_memPendingCardType)
 +                     if (g_cards[matchRow][matchCol].type == g_memPendingCardType)
-expect: stages_memory_pairs_left_means_no_bonus_yet
+expect: stages_memory_matching_pair_is_taken
 
 == stages: memory mismatch shown longer
 file: src/game/stages/memorystation.c
@@ -2500,7 +2493,7 @@ expect: stages_memory_duplicate_letter_pays_100
 file: src/game/stages/memorystation.c
 -         CUR.extraLetterR != 0 && CUR.extraLetterA != 0) {                                       \
 +         CUR.extraLetterR != 0) {                                                                \
-expect: stages_memory_spelling_EXTRA_gives_a_life
+expect: stages_memory_spelling_EXTRA_requires_A
 
 == stages: memory EXTRA life amount
 file: src/game/stages/memorystation.c

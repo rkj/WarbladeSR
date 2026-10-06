@@ -393,12 +393,7 @@ TEST(Flow_PackLevelData_stops_preloading_at_the_buffer_cap)
     CHECK_EQ_INT(g_alienGfxBufferedCount, 1);
 }
 
-// LoadHma (src/gfx/resources.c) builds the file name with sprintf(levelname, "%s.hma",
-// levelname): the overlapping copy is undefined, and with glibc it yields just ".hma", so
-// every hit mask is looked up as ".hma". The tests that need a mask add it under that name.
-#define HMA_NAME ".hma"
-
-TEST(Flow_PackLevelData_finds_no_hit_mask_under_its_real_name)
+TEST(Flow_PackLevelData_finds_a_hit_mask_under_its_real_name)
 {
     g_fake.imageW = 512;
     g_fake.imageH = 32;
@@ -409,7 +404,7 @@ TEST(Flow_PackLevelData_finds_no_hit_mask_under_its_real_name)
     g_maxBuffered = 10;
     PackLevelData(0, 1, 0);
     CHECK(g_alienGfxSlots[0].gfx[0] != NULL);
-    CHECK(g_alienGfxSlots[0].hma[0] == NULL);
+    CHECK(g_alienGfxSlots[0].hma[0] != NULL);
 }
 
 // A 512 x 32 hit mask with a solid box in frame A (x 0x1e0+3..10, y 2..20) and frame B
@@ -431,7 +426,7 @@ TEST(Flow_PackLevelData_scans_the_hit_mask_for_frame_rects)
     g_fake.imageW = 512;
     g_fake.imageH = 32;
     unsigned char *m = MakeHma();
-    PutFile(HMA_NAME, m, 512 * 32);
+    PutFile("alien1.hma", m, 512 * 32);
     free(m);
     PutLevel("classic_level_%03d.lvd", 1, RichLevel());
     g_maxBuffered = 10;
@@ -640,7 +635,7 @@ TEST(Flow_LoadLevelData_loads_graphics_that_were_not_preloaded)
     g_fake.imageW = 512;
     g_fake.imageH = 32;
     unsigned char *m = MakeHma();
-    PutFile(HMA_NAME, m, 512 * 32);
+    PutFile("alien1.hma", m, 512 * 32);
     free(m);
     PutLevel("classic_level_%03d.lvd", 1, RichLevel());
     g_maxBuffered = 0;

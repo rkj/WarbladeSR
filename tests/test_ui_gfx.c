@@ -1,6 +1,9 @@
 // Tests for src/ui/title.c (splashes, logo flashes, menu prompt, the attract-mode cycle,
 // ResetToTitle), src/game/hud.c (score popups, rows, FPS, boss bar), src/gfx/particles.c,
 // explosions.c, stars.c, frames.c and resources.c.
+#include <limits.h>
+#include <stdlib.h>
+#include <string.h>
 #include "support.h"
 
 static void Screen(void)
@@ -201,11 +204,14 @@ TEST(ui_Title_wrap_to_the_intro_starts_a_streak)
     WinInit();
     RunFrames(1);
     SeedRand(5);
+    g_rngX = g_rngY = g_rngZ = 0;
+    g_rngW = 1;
+    g_rngT = 0;
     g_attractScreen = ATTRACT_HALL_OF_FAME;
     g_streakActive = 0;
     g_titleResetPending = 1;
     KeepMenuAwake();
-    RunFrames(1);
+    MenuHandler();
     CHECK_EQ_INT(g_attractScreen, ATTRACT_INTRO);
     CHECK_EQ_INT(g_streakActive, 1);
     CHECK_NEAR(g_streakAlphaStep, 6.375, 0);
@@ -234,6 +240,9 @@ TEST(ui_ResetToTitle_returns_to_the_title)
     g_state = STATE_PAUSED;
     g_attractScreen = ATTRACT_HALL_OF_FAME;
     g_playerUpdateFn = StateDemo;
+    g_cfg.musicFormat = MUSIC_FMT_MOD;
+    g_playlistCount = 0;
+    g_musicMode = MUSIC_BOSS;
     int zoom = FakePlayCount("zoom");
     g_time = 50000;
     ResetToTitle();
@@ -434,6 +443,9 @@ TEST(ui_UpdateParticles_moves_by_mode_and_expires)
     AddParticle(NULL, 100, 100, 10, -4, 350, 20, 0, 1, 2, 3, 100, 2.5f, 2, -1, 0.5f, 0, NULL, NULL, 0);
     AddParticle(NULL, 100, 100, 10, 0, 0, 0, 0, 1, 2, 3, 100, 10, 2, -1, 0.5f, 1, NULL, NULL, 0);
     AddParticle(NULL, 100, 100, 10, 0, 0, 0, 0, 1, 2, 3, 100, 10, 2, -1, 0.5f, 2, NULL, NULL, 0);
+    AddParticle(NULL, 100, 100, 1.5f, -1, 0, 0, 0, 1, 2, 3, 100, 10, 0, -1, 0, 3, NULL, NULL, 0);
+    g_particles[1].vx = 3;   // mode 1 must ignore its horizontal velocity
+    g_particles[2].vx = 3;
     UpdateParticles();
     CHECK_NEAR(g_particles[0].x, 100 + g_cosDeg[0] * 2, 1e-4);
     CHECK_NEAR(g_particles[0].vy, -g_sinDeg[0] * 2 + 0.5, 1e-4);
@@ -442,7 +454,8 @@ TEST(ui_UpdateParticles_moves_by_mode_and_expires)
     CHECK_NEAR(g_particles[0].alpha, 60, 1e-4);
     CHECK_NEAR(g_particles[1].x, 100, 0);          // vertical only
     CHECK_NEAR(g_particles[2].y, 100, 0);          // horizontal only
-    CHECK_NEAR(g_particles[2].x, 100 + g_cosDeg[0] * 2, 1e-4);
+    CHECK_NEAR(g_particles[2].x, 103, 1e-4);
+    CHECK_NEAR(g_particles[3].size, 1, 0);         // a subpixel size is clamped immediately
     UpdateParticles();
     CHECK_NEAR(g_particles[0].size, 2, 0);
     UpdateParticles();
@@ -724,12 +737,38 @@ TEST(ui_LoadGraphic_lowercases_the_name)
     CHECK(LoadGraphic2("x.png", true, false) == NULL);
 }
 
-// NOTE: LoadHma builds its file name with sprintf(levelname, "%s.hma", levelname), source
-// and destination overlapping: undefined behaviour, and with this glibc the name comes out as
-// just ".hma", so no mask is ever found. Only the not-found path is tested here.
 TEST(ui_LoadHma_without_the_file_returns_null)
 {
     CHECK(LoadHma("nothing", 3, 2) == NULL);
+}
+
+TEST(ui_LoadHma_reads_a_lowercase_mask_with_the_requested_size)
+{
+    const unsigned char mask[] = {1, 2, 3, 4, 5, 6};
+    FakePacAdd("fighter1.hma", mask, sizeof mask);
+    unsigned char *loaded = LoadHma("Fighter1", 3, 2);
+    CHECK(loaded != NULL);
+    CHECK_MEM(loaded, mask, sizeof mask);
+    free(loaded);
+}
+
+TEST(ui_LoadHma_zero_fills_short_files_and_rejects_invalid_dimensions)
+{
+    const unsigned char shortMask[] = {10, 20, 30};
+    FakePacAdd("short.hma", shortMask, sizeof shortMask);
+    unsigned char *loaded = LoadHma("short", 2, 2);
+    CHECK(loaded != NULL);
+    const unsigned char want[] = {10, 20, 30, 0};
+    CHECK_MEM(loaded, want, sizeof want);
+    free(loaded);
+
+    CHECK(LoadHma("short", 0, 2) == NULL);
+    CHECK(LoadHma("short", 2, -1) == NULL);
+    CHECK(LoadHma("short", INT_MAX, INT_MAX) == NULL);
+    char tooLongName[509];
+    memset(tooLongName, 'x', sizeof tooLongName - 1);
+    tooLongName[sizeof tooLongName - 1] = 0;
+    CHECK(LoadHma(tooLongName, 1, 1) == NULL);
 }
 
 TEST(ui_DrawFlash_fades_over_30_frames)

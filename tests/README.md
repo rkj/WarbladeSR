@@ -21,6 +21,12 @@ build/tests/wbtests -l           # list them
   cmake -S tests -B build/tests -G Ninja -DCMAKE_PREFIX_PATH=$PWD/build/deps-test/prefix
   cmake --build build/tests && build/tests/wbengine
   ```
+  Set `WB_TEST_DEPS` to build dependencies outside the source checkout, and pass its
+  `prefix` folder through `WB_DEPS` or `CMAKE_PREFIX_PATH`.
+- `python3 tests/test_runner.py` checks runner failures (temporary files, forks, output
+  redirection and interrupted/failed waits) using an isolated fault injector.
+  `python3 tests/test_mutate.py` checks mutation error reporting, selection and cleanup.
+  CI runs both harness checks.
 - Each test runs in its own forked process, so it starts from the program's initial globals,
   and a crash or a hang (20 s) fails only that test.
 - No game data is needed. `BootGame()` (`support.h`) runs the real start-up (`GameMain`) up to
@@ -56,7 +62,8 @@ expect: StrHash_is_the_31_polynomial
 ```
 
 `tests/mutate.py` applies them one at a time (to a copy of the tree, never the working tree),
-rebuilds, runs the tests and reports any mutation the tests don't catch:
+rebuilds, runs the named expected tests (or the full suite when none are named), and reports
+any mutation the tests don't catch:
 
 ```sh
 tests/mutate.py            # all mutations, in parallel
@@ -64,3 +71,13 @@ tests/mutate.py -k strutil # those whose name contains "strutil"
 ```
 
 When adding a test, add a mutation that breaks what it checks, and see it reported as killed.
+
+The full game and engine suites run before any mutation. Temporary build trees are cleaned
+on success and failure. The mutation process still checks every named expected failure.
+
+## Regression coverage
+
+The suite covers keyboard, physical gamepad, touch and legacy joystick input; both orders
+of two-player collision dispatch; each obstruction box set; gem respawn without double
+movement; hit-mask filenames and dimensions; and ownership through profile migrations.
+Regression mutations deliberately restore the faulty behavior to check these assertions.

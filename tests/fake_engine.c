@@ -47,6 +47,8 @@ void FakeReset(void)
     g_fake.millis = 100000;
     g_fake.flipAdvanceMs = 16;
     g_fake.imageW = g_fake.imageH = 64;
+    g_fake.joyX[0] = g_fake.joyX[1] = 0x7fff;
+    g_fake.joyY[0] = g_fake.joyY[1] = 0x7fff;
     g_fake.localDate = (SysDate){2009, 6, 1, 15, 12, 30, 45, 500};
     g_fake.fileTime = 128895606455000000LL;    // 2009-06-15 12:30:45.5 UTC
     g_fake.vsync = true;
@@ -375,8 +377,8 @@ void ClipPointer(bool on)
     g_fake.clipPointerCalls++;
 }
 bool JoyEnable(char joy) { return joy >= 0 && joy < 2 && g_fake.joyPresent[(int)joy]; }
-long JoyX(char joy, char hat) { (void)joy; (void)hat; return 0x7fff; }
-long JoyY(char joy, char hat) { (void)joy; (void)hat; return 0x7fff; }
+long JoyX(char joy, char hat) { (void)hat; return joy >= 0 && joy < 2 ? g_fake.joyX[(int)joy] : 0x7fff; }
+long JoyY(char joy, char hat) { (void)hat; return joy >= 0 && joy < 2 ? g_fake.joyY[(int)joy] : 0x7fff; }
 bool JoyButton(char joy, long mask) { (void)joy; (void)mask; return false; }
 
 // ---- audio ----
@@ -427,3 +429,10 @@ void ChanSlide(AudioHandle ch, enum AudioAttrib attrib, float value, int ms)
 double ChanLength(AudioHandle ch) { (void)ch; return 1.0; }
 unsigned long ChanGetPos(AudioHandle ch) { (void)ch; return 0; }
 void ChanSetPos(AudioHandle ch, unsigned long pos) { (void)ch; (void)pos; }
+
+unsigned SysPadState(int pad)
+{
+    return pad >= 0 && pad < 2 ? g_fake.padBits[pad] | (pad == 0 ? g_fake.virtualPad : 0) : 0;
+}
+
+void SysSetVirtualPad(unsigned bits) { g_fake.virtualPad = bits; }
