@@ -6,13 +6,18 @@ WARBLADE_PUBLIC_ORIGIN in deployment; the latter is the exact browser origin.
 
 import hashlib
 import ipaddress
+import json
+import logging
+import math
 import os
 import re
 import secrets
 import sqlite3
 import time
+from collections import deque
 from contextlib import contextmanager
 from pathlib import Path
+from threading import Lock
 from urllib.parse import urlsplit
 
 from argon2 import PasswordHasher
@@ -31,6 +36,48 @@ USERNAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{2,31}\Z")
 SEGMENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9 _.-]{0,99}\Z")
 hasher = PasswordHasher()
 DUMMY_HASH = hasher.hash("invalid-account-placeholder")
+PERFORMANCE_LOG = logging.getLogger("uvicorn.error")
+PERFORMANCE_FIELDS = frozenset(("version", "device", "browser", "phase", "frames",
+                                "duration_ms", "fps", "mean_ms", "p95_ms", "max_ms",
+                                "over_33_pct", "target_fps"))
+
+
+def _performance_fields(data: bytes) -> dict:
+    def unique_fields(pairs):
+        fields = {}
+        for key, value in pairs:
+            if key in fields:
+                raise ValueError("Duplicate field")
+            fields[key] = value
+        return fields
+
+    try:
+        fields = json.loads(data, object_pairs_hook=unique_fields)
+    except (ValueError, TypeError, UnicodeDecodeError):
+        raise HTTPException(400, "Invalid performance report") from None
+    if not isinstance(fields, dict) or fields.keys() != PERFORMANCE_FIELDS:
+        raise HTTPException(400, "Invalid performance report")
+    for name, lower, upper in (("version", 1, 1), ("frames", 1, 20000),
+                                ("target_fps", 1, 300)):
+        if type(fields[name]) is not int or not lower <= fields[name] <= upper:
+            raise HTTPException(400, "Invalid performance report")
+    for name, choices in (("device", ("mobile", "desktop")),
+                          ("browser", ("chromium", "firefox", "safari", "other")),
+                          ("phase", ("menu", "play", "paused"))):
+        if type(fields[name]) is not str or fields[name] not in choices:
+            raise HTTPException(400, "Invalid performance report")
+    for name, lower, upper in (("duration_ms", 1000, 120000), ("fps", 0, 300),
+                                ("mean_ms", 0, 10000), ("p95_ms", 0, 10000),
+                                ("max_ms", 0, 120000), ("over_33_pct", 0, 100)):
+        value = fields[name]
+        if (type(value) not in (int, float) or not lower <= value <= upper or
+                not math.isfinite(value)):
+            raise HTTPException(400, "Invalid performance report")
+    if (abs(fields["fps"] - fields["frames"] * 1000 / fields["duration_ms"]) > 0.2 or
+            abs(fields["mean_ms"] - fields["duration_ms"] / fields["frames"]) > 0.2 or
+            fields["p95_ms"] > fields["max_ms"] or fields["mean_ms"] > fields["max_ms"]):
+        raise HTTPException(400, "Invalid performance report")
+    return fields
 
 
 def _path(path: str) -> str:
@@ -183,6 +230,48 @@ def create_app(db_path: str | Path, public_origin: str, *, secure_cookie: bool |
     def check_origin(request: Request):
         if request.headers.get("origin") != public_origin:
             raise HTTPException(403, "Origin denied")
+
+    # Telemetry is independent of accounts and the persistent database. Sliding
+    # windows bound both per-peer traffic and total log volume; keys expire in RAM.
+    performance_peers = {}
+    performance_global = deque()
+    performance_lock = Lock()
+
+    @api.post("/api/performance", dependencies=[Depends(check_origin)])
+    async def performance(request: Request):
+        length = request.headers.get("content-length", "")
+        if length.isdigit() and int(length) > 1024:
+            raise HTTPException(413, "Request too large")
+        data = bytearray()
+        async for chunk in request.stream():
+            if len(data) + len(chunk) > 1024:
+                raise HTTPException(413, "Request too large")
+            data.extend(chunk)
+        fields = _performance_fields(data)
+        try:
+            peer = client_ip(request)
+        except ValueError:
+            raise HTTPException(400, "Invalid client address") from None
+        now = time.monotonic()
+        with performance_lock:
+            for address, accepted in list(performance_peers.items()):
+                while accepted and accepted[0] <= now - 60:
+                    accepted.popleft()
+                if not accepted:
+                    del performance_peers[address]
+            while performance_global and performance_global[0] <= now - 60:
+                performance_global.popleft()
+            accepted = performance_peers.get(peer)
+            if (len(performance_global) >= 120 or (accepted is not None and len(accepted) >= 3) or
+                    (accepted is None and len(performance_peers) >= 1024)):
+                raise HTTPException(429, "Too many performance reports")
+            if accepted is None:
+                accepted = performance_peers[peer] = deque()
+            accepted.append(now)
+            performance_global.append(now)
+        PERFORMANCE_LOG.info(json.dumps({"event": "warblade_performance", **fields},
+                                        separators=(",", ":"), allow_nan=False))
+        return Response(status_code=204)
 
     def session_token(request: Request) -> str:
         if session_mode == "cookie":

@@ -27,6 +27,12 @@ static char webLoginPassword[257];
 static char webAuthError[193];
 void WebSaveSettings(void);
 
+// Count completed game frames, including rendering/pacing; a separate browser
+// animation loop would report display refresh even when this game runs slowly.
+EM_JS(void, WebPerformanceFrame, (int phase, int target), {
+    if (Module.onPerformanceFrame) Module.onPerformanceFrame(phase, target);
+});
+
 EM_ASYNC_JS(int, WebAuthenticate, (const char *username, const char *password, int create), {
     try {
         return await Module.authenticateGame(UTF8ToString(username), UTF8ToString(password), !!create) ? 1 : 0;
@@ -777,6 +783,10 @@ int GameMain()
                 FlushBlit(0);
             }
             FlipBuffer(0);
+#ifdef __EMSCRIPTEN__
+            WebPerformanceFrame(g_state == STATE_TITLE || g_state == STATE_HISCORE_TABLE ? 0 :
+                                g_state == STATE_PAUSED ? 2 : 1, g_cfg.fps);
+#endif
         }
         if (g_soundEnabled != 0) {
             AudioUpdate();
