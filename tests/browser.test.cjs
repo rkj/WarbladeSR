@@ -55,9 +55,9 @@ test('server saves survive a fresh login; no browser persistence or remembered l
     await alice.page.waitForFunction(() => Module._WebAccountStatus() === 1);
     await play(alice.page, 2);
     const bob = await account(browser, 'BrowserBob');
+    await play(bob.page, 1);
     assert.equal(await bob.page.evaluate(async (path) =>
       (await accountFetch('/api/saves/' + path)).text(), PROFILE), '1\n');
-    await play(bob.page, 1);
     assert.deepEqual(alice.errors, []);
     assert.deepEqual(bob.errors, []);
     await bob.context.close();
