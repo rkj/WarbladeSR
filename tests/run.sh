@@ -185,5 +185,5 @@ status=0
 cd "$root"
 python3 -m unittest -v "$root/tests/test_server.py" || status=1
 PYTHONPATH="$root" python3 -m unittest discover -s "$root/tests" -p 'test_hiscores.py' -v || status=1
-node --test --test-concurrency=1 "$root/tests/browser.test.cjs" "$root/tests/auth.test.cjs" "$root/tests/startup.test.cjs" || status=1
+node --test --test-concurrency=1 "$root/tests/browser.test.cjs" "$root/tests/auth.test.cjs" "$root/tests/startup.test.cjs" "$root/tests/mobile-login.test.cjs" || status=1
 exit $status
