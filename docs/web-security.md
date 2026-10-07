@@ -23,3 +23,5 @@ The API returns `Cache-Control: private, no-store` and downloaded saves have `ap
 `tests/test_api.py` checks account isolation, password hashing, origin/path restrictions, size quotas, revision races, rate limits and two simultaneous high-score submissions from the same board revision. `tests/test_server.py` checks the static image's HTTP boundary and headers. `tests/browser.test.cjs` checks that the browser requires a server account, uploads a game save through the API and never mounts `/save` in IndexedDB.
 
 The read-only game assets load before authentication so the native login screen can render. The public game has no second identity gateway. Private saves and high-score APIs require the in-memory bearer session, and game launch is blocked until the native login succeeds.
+
+Usernames are case-insensitive for both sign-in and registration uniqueness: `rkj`, `RkJ` and `RKJ` identify the same account and saved progress. The server returns the registered spelling; uppercase-only game fonts display its capital glyphs. Passwords remain case-sensitive.

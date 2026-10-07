@@ -6,6 +6,7 @@ import atexit
 import stat
 import struct
 import zlib
+import pytest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -46,6 +47,39 @@ def test_password_length_boundaries(tmp_path):
         assert c.post("/api/register", json=fields, headers=headers).status_code == 200
         assert c.post("/api/logout", headers=headers).status_code == 200
         assert c.post("/api/login", json=fields, headers=headers).status_code == 200
+
+
+@pytest.mark.parametrize("session_mode", ["cookie", "memory"])
+def test_username_case_variants_share_account_and_saves(tmp_path, session_mode):
+    c = client(tmp_path, session_mode=session_mode)
+    headers = {"Origin": ORIGIN}
+    fields = {"username": "RkJ", "password": "Eight123"}
+    registered = c.post("/api/register", json=fields, headers=headers)
+    assert registered.status_code == 200
+    if session_mode == "memory":
+        c.headers["Authorization"] = "Bearer " + registered.json()["token"]
+    assert c.put(PATH, content=b"same player progress",
+                 headers={**headers, "If-Match": "*"}).status_code == 200
+    assert c.post("/api/logout", headers=headers).status_code == 200
+    c.headers.pop("Authorization", None)
+
+    for name in ("rkj", "RKJ", "rKj"):
+        # Spelling case never creates another identity or redirects its saves.
+        assert c.post("/api/register", json={**fields, "username": name},
+                      headers=headers).status_code == 409
+        assert c.post("/api/login", json={"username": name, "password": "eight123"},
+                      headers=headers).status_code == 401
+        logged_in = c.post("/api/login", json={**fields, "username": name}, headers=headers)
+        assert logged_in.status_code == 200
+        assert logged_in.json()["username"] == "RkJ"
+        if session_mode == "memory":
+            c.headers["Authorization"] = "Bearer " + logged_in.json()["token"]
+        assert c.get("/api/me").json() == {"username": "RkJ"}
+        assert c.get(PATH).content == b"same player progress"
+        assert c.post("/api/logout", headers=headers).status_code == 200
+        c.headers.pop("Authorization", None)
+    with sqlite3.connect(tmp_path / "state.sqlite3") as db:
+        assert db.execute("SELECT count(*) FROM accounts").fetchone()[0] == 1
 
 
 def test_accounts_sessions_and_isolation(tmp_path):
