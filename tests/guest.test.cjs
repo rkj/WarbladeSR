@@ -178,6 +178,17 @@ test('real native guest button starts a fresh profile and reload discards it',
       assert.equal(await page.evaluate(() => Module._WebLoginReady()), 0);
       assert.equal(await page.locator('#login-name').isVisible(), false);
       assert.equal(await page.locator('#login-password').isVisible(), false);
+      // Account management belongs to the title menu. Leave the guest game
+      // through its normal quit-current-game confirmation before opening it.
+      await page.locator('#canvas').focus();
+      await page.keyboard.down('Escape');
+      await page.waitForTimeout(150);
+      await page.keyboard.up('Escape');
+      await page.waitForTimeout(1000);
+      await page.keyboard.down('Enter');
+      await page.waitForTimeout(150);
+      await page.keyboard.up('Enter');
+      await page.waitForTimeout(1500);
       // Returning to guest after opening sign-in keeps progress from this visit.
       await page.evaluate(() => {
         FS.writeFile('/save/warblade/current-visit.txt', new Uint8Array([21]));
