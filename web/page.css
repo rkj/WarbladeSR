@@ -48,3 +48,8 @@ input:focus-visible, button:focus-visible, label.button:focus-visible { outline:
   border: 0; border-radius: 0; background: transparent; color: transparent;
   caret-color: transparent; font: 16px sans-serif; touch-action: manipulation;
   -webkit-text-fill-color: transparent; outline: none !important; }
+
+/* A small readout inside the game picture; it never captures game input. */
+#performance { position: fixed; z-index: 3; pointer-events: none;
+  padding: 2px 5px; border-radius: 3px; background: rgba(0, 0, 0, 0.65);
+  color: #d8dde8; font: 12px/1.4 monospace; font-variant-numeric: tabular-nums; }

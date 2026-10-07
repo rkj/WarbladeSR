@@ -511,6 +511,101 @@ function enableTouch() {
   show('touch', true);
 }
 
+// ---- game performance ----
+// One constant-cost sample per completed native game frame. No RAF sampler,
+// per-frame logging, account identity, storage, retries or unload beacons.
+const performancePhases = ['menu', 'play', 'paused'];
+const performanceDevice = matchMedia('(pointer: coarse)').matches ? 'mobile' : 'desktop';
+const performanceBrowser = /Firefox\//.test(navigator.userAgent) ? 'firefox' :
+  /(?:Chrome|Chromium|CriOS|Edg)\//.test(navigator.userAgent) ? 'chromium' :
+  /Safari\//.test(navigator.userAgent) ? 'safari' : 'other';
+let performancePreviousAt = null, performancePreviousPhase = -1, performancePreviousTarget = 0;
+let performanceReportAt = null;
+let performanceDisplayFrames = 0, performanceDisplayMs = 0;
+let performanceBuckets = new Map();
+let performanceSending = false;
+function placePerformanceCounter() {
+  const rect = $('canvas').getBoundingClientRect();
+  $('performance').style.left = (rect.left + 6) + 'px';
+  $('performance').style.top = (rect.top + 6) + 'px';
+}
+function performanceSummary(phase, bucket) {
+  let count = 0, p95 = bucket.max;
+  for (let i = 0; i < bucket.histogram.length; i++) {
+    count += bucket.histogram[i];
+    if (count >= Math.ceil(bucket.frames * 0.95)) {
+      p95 = i === 255 ? bucket.max : i * 4;
+      break;
+    }
+  }
+  const round = value => Math.round(value * 100) / 100;
+  return {version: 1, device: performanceDevice, browser: performanceBrowser, phase,
+    frames: bucket.frames, duration_ms: round(bucket.ms), fps: round(1000 * bucket.frames / bucket.ms),
+    mean_ms: round(bucket.ms / bucket.frames), p95_ms: round(Math.min(p95, bucket.max)), max_ms: round(bucket.max),
+    over_33_pct: round(100 * bucket.slow / bucket.frames), target_fps: bucket.target};
+}
+function reportPerformance() {
+  const reports = [];
+  for (const [phase, bucket] of performanceBuckets) {
+    if (bucket.ms >= 1000 && bucket.ms <= 120000 && bucket.frames <= 20000)
+      reports.push(performanceSummary(phase, bucket));
+  }
+  performanceBuckets.clear();
+  if (performanceSending || !reports.length) return;
+  performanceSending = true;
+  // Omit ambient cookies and bearer tokens even during authenticated play.
+  Promise.all(reports.map(report => fetch('/api/performance', {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, credentials: 'omit',
+    cache: 'no-store', body: JSON.stringify(report), signal: typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(5000) : undefined,
+  }).catch(() => {}))).finally(() => { performanceSending = false; });
+}
+function onPerformanceFrame(phase, target, now = performance.now()) {
+  if (document.visibilityState !== 'visible') { performancePreviousAt = null; return; }
+  const phaseName = performancePhases[phase];
+  if (!phaseName || !Number.isFinite(now) || !Number.isInteger(target) || target < 1 || target > 300) return;
+  if (performanceReportAt === null) performanceReportAt = now;
+  if (now - performanceReportAt >= 60000) {
+    reportPerformance();
+    performanceReportAt = now;
+  }
+  const previousAt = performancePreviousAt;
+  const sameMode = performancePreviousPhase === phase && performancePreviousTarget === target;
+  performancePreviousAt = now;
+  performancePreviousPhase = phase;
+  performancePreviousTarget = target;
+  if (previousAt === null || !sameMode) return;
+  const dt = now - previousAt;
+  if (!(dt > 0 && dt <= 120000)) return;
+  performanceDisplayFrames++;
+  performanceDisplayMs += dt;
+  if (performanceDisplayMs >= 1000) {
+    $('performance').textContent = Math.round(1000 * performanceDisplayFrames / performanceDisplayMs) + ' FPS';
+    $('performance').hidden = !$('loading').hidden;
+    placePerformanceCounter();
+    performanceDisplayFrames = 0;
+    performanceDisplayMs = 0;
+  }
+  let bucket = performanceBuckets.get(phaseName);
+  if (!bucket || bucket.target !== target) {
+    bucket = {frames: 0, ms: 0, max: 0, slow: 0, target, histogram: new Uint32Array(256)};
+    performanceBuckets.set(phaseName, bucket);
+  }
+  bucket.frames++;
+  bucket.ms += dt;
+  bucket.max = Math.max(bucket.max, dt);
+  if (dt > 33.34) bucket.slow++;
+  bucket.histogram[Math.min(255, Math.ceil(dt / 4))]++;
+}
+document.addEventListener('visibilitychange', () => {
+  // Drop hidden time, including the interval spanning hide/resume. Reset the
+  // report window too, so background tabs produce neither low FPS nor traffic.
+  performancePreviousAt = null;
+  performanceReportAt = null;
+  performanceBuckets.clear();
+  performanceDisplayFrames = performanceDisplayMs = 0;
+  $('performance').hidden = true;
+});
+
 // ---- the game ----
 
 let gameStarted = false;
@@ -544,7 +639,7 @@ function start() {
 
 var Module = {
   canvas: $('canvas'),
-  authenticateGame, signOutGame, beginGuestGame, syncLoginInputs,
+  authenticateGame, signOutGame, beginGuestGame, syncLoginInputs, onPerformanceFrame,
   accountName: '', authError: '',
   onGameScoreWritten: () => queueMicrotask(() => persistSaves()),
   print: (t) => console.log(t),
@@ -634,6 +729,7 @@ function fitGameViewport() {
   const height = window.visualViewport?.height || window.innerHeight;
   document.documentElement.style.setProperty('--game-height', height + 'px');
   if (loginInputState) syncLoginInputs(loginInputState);
+  placePerformanceCounter();
 }
 window.visualViewport?.addEventListener('resize', fitGameViewport);
 window.addEventListener('resize', fitGameViewport);

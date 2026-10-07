@@ -314,3 +314,102 @@ def test_concurrent_high_scores_merge_without_overwrite(tmp_path):
                  headers={"Origin": ORIGIN, "If-Match": "*"}).status_code == 400
     # A retry of the same candidate is idempotent; the board stays at version 2.
     assert submit("Alice", 1500, a.cookies.get(api_module.COOKIE)).headers["etag"] == '"2"'
+
+
+def performance_report(**changes):
+    return {"version": 1, "device": "mobile", "browser": "safari", "phase": "play",
+            "frames": 600, "duration_ms": 10000, "fps": 60, "mean_ms": 16.67,
+            "p95_ms": 20, "max_ms": 40, "over_33_pct": 1, "target_fps": 60,
+            **changes}
+
+
+def test_guest_performance_logs_only_allowlist_without_database_writes(tmp_path, caplog, monkeypatch):
+    import json
+    import logging
+    c = client(tmp_path, session_mode="memory")
+    with sqlite3.connect(tmp_path / "state.sqlite3") as db:
+        before = list(db.iterdump())
+    # A guest report must not open the database or look up the provided token.
+    monkeypatch.setattr(api_module.sqlite3, "connect", lambda *args, **kwargs:
+                        pytest.fail("Performance telemetry accessed the database"))
+    with caplog.at_level(logging.INFO, logger="uvicorn.error"):
+        response = c.post("/api/performance", json=performance_report(),
+                          headers={"Origin": ORIGIN, "Authorization": "Bearer private-token",
+                                   "User-Agent": "private-device", "X-Forwarded-For": "203.0.113.4"})
+    assert response.status_code == 204
+    assert not response.content
+    assert not response.cookies
+    assert response.headers["cache-control"] == "private, no-store"
+    records = [r.getMessage() for r in caplog.records if r.name == "uvicorn.error"]
+    assert len(records) == 1
+    assert json.loads(records[0]) == {"event": "warblade_performance", **performance_report()}
+    assert all(value not in records[0] for value in ("private-token", "private-device", "203.0.113.4", "127.0.0.1"))
+    monkeypatch.undo()
+    with sqlite3.connect(tmp_path / "state.sqlite3") as db:
+        assert list(db.iterdump()) == before
+
+
+@pytest.mark.parametrize("changes", [
+    {"username": "secret"}, {"version": True}, {"version": 2}, {"frames": True},
+    {"frames": 0}, {"frames": 20001}, {"frames": 600.0}, {"fps": "60"},
+    {"fps": False}, {"fps": float("nan")}, {"fps": float("inf")},
+    {"fps": -1}, {"fps": 301}, {"fps": 59}, {"mean_ms": 17},
+    {"duration_ms": 999}, {"duration_ms": 120001}, {"device": "phone model"},
+    {"browser": "Chrome/123"}, {"phase": "account-name"}, {"phase": []},
+    {"target_fps": 0}, {"target_fps": True}, {"max_ms": 10}, {"p95_ms": 41},
+    {"over_33_pct": 101}, {"over_33_pct": -1}, {"mean_ms": 10**1000},
+])
+def test_performance_rejects_unbounded_or_identifying_fields(tmp_path, changes, caplog):
+    import json
+    c = client(tmp_path)
+    # Standard JSON encoder deliberately exercises the server's NaN/Infinity guard.
+    response = c.post("/api/performance", content=json.dumps(performance_report(**changes)),
+                      headers={"Origin": ORIGIN, "Content-Type": "application/json"})
+    assert response.status_code in (400, 413)
+    assert not any(r.name == "uvicorn.error" for r in caplog.records)
+
+
+def test_performance_origin_json_and_stream_body_bounds(tmp_path):
+    import json
+    c = client(tmp_path)
+    for origin in (None, "https://different.example"):
+        assert c.post("/api/performance", json=performance_report(),
+                      headers={} if origin is None else {"Origin": origin}).status_code == 403
+    for data in (b"[]", b"null", b"invalid", b"{}", b"\xff",
+                 json.dumps(performance_report()).replace('"version": 1', '"version": 1, "version": 1').encode()):
+        assert c.post("/api/performance", content=data, headers={"Origin": ORIGIN}).status_code == 400
+    assert c.post("/api/performance", content=b"x" * 1025,
+                  headers={"Origin": ORIGIN}).status_code == 413
+    # No Content-Length: the chunked stream must be stopped at the same bound.
+    assert c.post("/api/performance", content=iter((b"x" * 600, b"x" * 600)),
+                  headers={"Origin": ORIGIN}).status_code == 413
+
+
+def test_performance_sliding_rate_limits_proxy_identity_and_expiry(tmp_path, monkeypatch):
+    c = client(tmp_path, trusted_proxy_ips="127.0.0.1")
+    now = [1000.0]
+    monkeypatch.setattr(api_module.time, "monotonic", lambda: now[0])
+    def post(address):
+        return c.post("/api/performance", json=performance_report(),
+                      headers={"Origin": ORIGIN, "X-Real-IP": address})
+    assert post("203.0.113.1, 203.0.113.2").status_code == 400
+    for _ in range(3):
+        assert post("203.0.113.1").status_code == 204
+    assert post("203.0.113.1").status_code == 429
+    for index in range(2, 41):
+        for _ in range(3):
+            assert post(f"203.0.113.{index}").status_code == 204
+    assert post("203.0.113.41").status_code == 429
+    now[0] += 59
+    assert post("203.0.113.1").status_code == 429
+    now[0] += 1
+    assert post("203.0.113.1").status_code == 204
+    assert post("203.0.113.41").status_code == 204
+
+
+def test_performance_untrusted_forwarding_cannot_evade_peer_limit(tmp_path):
+    c = client(tmp_path)
+    for index in range(4):
+        response = c.post("/api/performance", json=performance_report(),
+                          headers={"Origin": ORIGIN, "X-Real-IP": f"203.0.113.{index}"})
+        assert response.status_code == (204 if index < 3 else 429)
