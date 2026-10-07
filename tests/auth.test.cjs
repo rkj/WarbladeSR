@@ -37,9 +37,13 @@ test('native login bridge validates, authenticates and keeps no browser state', 
     });
     assert.equal(await page.evaluate(() => Module.authenticateGame('x','short',true)), false);
     assert.match(await page.evaluate(() => Module.authError), /Username: 3-32/);
-    assert.equal(await page.evaluate(() => Module.authenticateGame('TestPlayer','short',true)), false);
-    assert.match(await page.evaluate(() => Module.authError), /Password must have 12-256/);
+    assert.equal(await page.evaluate(() => Module.authenticateGame('TestPlayer','1234567',true)), false);
+    assert.match(await page.evaluate(() => Module.authError), /Password must have 8-256/);
     assert.equal(calls, 0);
+    // Eight characters reaches authentication rather than local validation.
+    assert.equal(await page.evaluate(() => Module.authenticateGame('TestPlayer','12345678',true)), false);
+    assert.match(await page.evaluate(() => Module.authError), /already taken/);
+    assert.equal(calls, 1);
     for (const [code, expected] of [[409,/already taken/], [400,/requirements/],
       [429,/15 minutes/], [403,/unavailable/], [500,/try again shortly/], [401,/Incorrect/]]) {
       status = code;

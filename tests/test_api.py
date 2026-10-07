@@ -34,6 +34,20 @@ def register(c, name):
     return res
 
 
+def test_password_length_boundaries(tmp_path):
+    c = client(tmp_path)
+    headers = {"Origin": ORIGIN}
+    for password in ("1234567", "x" * 257):
+        for endpoint in ("register", "login"):
+            assert c.post(f"/api/{endpoint}", json={"username": "Boundary", "password": password},
+                          headers=headers).status_code == 400
+    for name, password in (("Minimum", "12345678"), ("Maximum", "x" * 256)):
+        fields = {"username": name, "password": password}
+        assert c.post("/api/register", json=fields, headers=headers).status_code == 200
+        assert c.post("/api/logout", headers=headers).status_code == 200
+        assert c.post("/api/login", json=fields, headers=headers).status_code == 200
+
+
 def test_accounts_sessions_and_isolation(tmp_path):
     assert stat.S_IMODE((Path(_import_db_dir.name) / "import.sqlite3").stat().st_mode) == 0o600
     a = client(tmp_path)

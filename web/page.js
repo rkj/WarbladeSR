@@ -365,8 +365,8 @@ async function authenticateGame(username, password, create) {
     Module.authError = 'Username: 3-32 letters/numbers, dots, underscores or hyphens; start with a letter or number.';
     return false;
   }
-  if ([...password].length < 12 || [...password].length > 256) {
-    Module.authError = 'Password must have 12-256 characters.';
+  if ([...password].length < 8 || [...password].length > 256) {
+    Module.authError = 'Password must have 8-256 characters.';
     return false;
   }
   authBusy = true;
