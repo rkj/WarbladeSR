@@ -2639,6 +2639,8 @@ file: src/gfx/text.c
 -                     glyph = *p - 22;
 -                 if (*p >= 'A' && *p <= 'Z')
 -                     glyph = *p - 'A';
+-                 if (*p >= 'a' && *p <= 'z')
+-                     glyph = *p - 'a';
 -                 advance = TINY_GLYPH_W;
 -                 if (*p == '.') {
 -                     glyph = 36;
@@ -2731,6 +2733,8 @@ file: src/gfx/text.c
 +                     glyph = *p - 22;
 +                 if (*p >= 'A' && *p <= 'Z')
 +                     glyph = *p - 'A';
++                 if (*p >= 'a' && *p <= 'z')
++                     glyph = *p - 'a';
 +                 advance = TINY_GLYPH_W;
 +                 if (*p == '.') {
 +                     glyph = 36;

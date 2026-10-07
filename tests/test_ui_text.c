@@ -367,3 +367,29 @@ TEST(ui_DrawBigText_newline_restarts_the_line)
     CHECK_NEAR(g_blit[1].destY, 77, 0);
     CHECK_EQ_INT(g_curY, 75);
 }
+
+TEST(ui_bitmap_fonts_render_lowercase_without_changing_input)
+{
+    const char upper[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    char lower[] = "abcdefghijklmnopqrstuvwxyz";
+    void (*draw[])(const char *, int, int, int) = {
+        DrawMenuText, DrawTinyText, DrawTinyText2, DrawTinyTextAlt
+    };
+    Rect16 cells[26];
+    for (int font = 0; font < 5; font++) {
+        Screen();
+        if (font < 4) draw[font](upper, 10, 20, 1);
+        else DrawNewsText((char *)upper, 10, 20, 7);
+        CHECK_EQ_INT(font == 2 ? g_blit2Count : g_blitCount, 26);
+        for (int i = 0; i < 26; i++) cells[i] = font == 2 ? g_blit2[i].src : g_blit[i].src;
+        Screen();
+        if (font < 4) draw[font](lower, 10, 20, 1);
+        else DrawNewsText(lower, 10, 20, 7);
+        CHECK_EQ_INT(font == 2 ? g_blit2Count : g_blitCount, 26);
+        for (int i = 0; i < 26; i++) {
+            CHECK_EQ_INT((font == 2 ? g_blit2[i].src : g_blit[i].src).x1, cells[i].x1);
+            CHECK_EQ_INT((font == 2 ? g_blit2[i].src : g_blit[i].src).y1, cells[i].y1);
+        }
+        CHECK(strcmp(lower, "abcdefghijklmnopqrstuvwxyz") == 0);
+    }
+}
