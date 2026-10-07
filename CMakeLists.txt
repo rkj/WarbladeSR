@@ -72,16 +72,18 @@ else()
 endif()
 
 if(EMSCRIPTEN)
-    # The browser build (README.md, "Browser"): warblade.js/.wasm plus web/index.html, which
+    # The browser build (README.md, "Browser"): warblade.js/.wasm plus the page in web/, which
     # loads the player's own data/ into the virtual file system and starts the game.
     # Asyncify lets the game keep its blocking main loop: SysFlip and AudioUpdate yield.
     set_target_properties(warblade PROPERTIES SUFFIX ".js")
     target_link_options(warblade PRIVATE
         -sASYNCIFY -sASYNCIFY_STACK_SIZE=131072 -sSTACK_SIZE=4MB
         -sALLOW_MEMORY_GROWTH -sINITIAL_MEMORY=256MB
-        -sINVOKE_RUN=0 -sEXIT_RUNTIME=1 -sFORCE_FILESYSTEM -lidbfs.js
-        "-sEXPORTED_RUNTIME_METHODS=['FS','callMain']")
-    configure_file(web/index.html "${CMAKE_BINARY_DIR}/index.html" COPYONLY)
+        -sINVOKE_RUN=0 -sEXIT_RUNTIME=1 -sFORCE_FILESYSTEM
+        "-sEXPORTED_RUNTIME_METHODS=['FS','callMain','ccall']")
+    foreach(page index.html page.js page.css)
+        configure_file(web/${page} "${CMAKE_BINARY_DIR}/${page}" COPYONLY)
+    endforeach()
 endif()
 
 if(WARBLADE_ASAN AND MSVC)

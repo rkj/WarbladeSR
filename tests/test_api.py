@@ -1,0 +1,268 @@
+"""Account and private save API behavior, with a temporary persistent SQLite DB."""
+import os
+import sqlite3
+import tempfile
+import atexit
+import stat
+import struct
+import zlib
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+_import_db_dir = tempfile.TemporaryDirectory(prefix="warblade-api-test-")
+atexit.register(_import_db_dir.cleanup)
+os.environ.setdefault("WARBLADE_DB_PATH", str(Path(_import_db_dir.name) / "import.sqlite3"))
+os.environ.setdefault("WARBLADE_PUBLIC_ORIGIN", "http://localhost:8080")
+
+from fastapi.testclient import TestClient
+from server import app as api_module
+from server import hiscores
+
+ORIGIN = "http://localhost:8080"
+PATH = "/api/saves/warblade/profiles/profile000.acc"
+
+
+def client(tmp_path, **settings):
+    return TestClient(api_module.create_app(tmp_path / "state.sqlite3", ORIGIN, **settings),
+                      client=("127.0.0.1", 50000))
+
+
+def register(c, name):
+    res = c.post("/api/register", json={"username": name, "password": "long password 123"},
+                 headers={"Origin": ORIGIN})
+    assert res.status_code == 200, res.text
+    return res
+
+
+def test_accounts_sessions_and_isolation(tmp_path):
+    assert stat.S_IMODE((Path(_import_db_dir.name) / "import.sqlite3").stat().st_mode) == 0o600
+    a = client(tmp_path)
+    register(a, "Alice")
+    db = tmp_path / "state.sqlite3"
+    with sqlite3.connect(db) as con:
+        hash_value = con.execute("SELECT password_hash FROM accounts").fetchone()[0]
+        token_hash = con.execute("SELECT token_hash FROM sessions").fetchone()[0]
+    assert hash_value.startswith("$argon2id$")
+    assert "long password 123" not in hash_value
+    assert token_hash != a.cookies.get(api_module.COOKIE).encode()
+    assert "HttpOnly" in a.post("/api/login", json={"username": "Alice", "password": "long password 123"},
+                               headers={"Origin": ORIGIN}).headers["set-cookie"]
+    assert a.get("/api/me").json() == {"username": "Alice"}
+    assert a.get("/api/me").headers["cache-control"] == "private, no-store"
+    assert a.post("/api/register", json={"username": "alice", "password": "long password 123"},
+                  headers={"Origin": ORIGIN}).status_code == 409
+
+    created = a.put(PATH, content=b"secret", headers={"Origin": ORIGIN, "If-Match": "*"})
+    assert created.status_code == 200
+    etag = created.headers["etag"]
+    assert a.get(PATH).content == b"secret"
+    assert a.get("/api/saves").json()["files"] == [
+        {"path": "warblade/profiles/profile000.acc", "size": 6, "version": created.json()["version"]}]
+    b = client(tmp_path)
+    register(b, "Bob")
+    assert b.get("/api/saves").json() == {"files": []}
+    assert b.get(PATH).status_code == 404
+    assert b.put(PATH, content=b"own", headers={"Origin": ORIGIN, "If-Match": etag}).status_code == 412
+    assert b.delete(PATH, headers={"Origin": ORIGIN, "If-Match": etag}).status_code == 404
+    assert a.get(PATH).headers["content-type"] == "application/octet-stream"
+    assert a.get(PATH).headers["x-content-type-options"] == "nosniff"
+    assert a.post("/api/logout", headers={"Origin": ORIGIN}).status_code == 200
+    assert a.get("/api/me").status_code == 401
+    assert a.get(PATH).status_code == 401
+    assert a.get(PATH).headers["cache-control"] == "private, no-store"
+
+
+def test_origin_paths_and_limits(tmp_path, monkeypatch):
+    c = client(tmp_path)
+    assert c.post("/api/register", json={"username": "Alice", "password": "long password 123"}).status_code == 403
+    register(c, "Alice")
+    assert c.put(PATH, content=b"x", headers={"If-Match": "*"}).status_code == 403
+    for path in ("../passwd", "warblade/../passwd", "warblade/.hidden", "warblade/a\\b",
+                 "warblade//x", "warblade/evil.svg%00"):
+        res = c.put("/api/saves/" + path, content=b"x", headers={"Origin": ORIGIN, "If-Match": "*"})
+        assert res.status_code in (400, 404), (path, res.text)
+    assert c.put(PATH, content=b"x" * (api_module.MAX_FILE_BYTES + 1),
+                 headers={"Origin": ORIGIN, "If-Match": "*"}).status_code == 413
+    assert c.put(PATH, content=b"x", headers={"Origin": ORIGIN}).status_code == 428
+    monkeypatch.setattr(api_module, "MAX_FILES", 1)
+    created = c.put(PATH, content=b"x", headers={"Origin": ORIGIN, "If-Match": "*"})
+    assert created.status_code == 200
+    assert c.put("/api/saves/warblade/settings.dat", content=b"x",
+                 headers={"Origin": ORIGIN, "If-Match": "*"}).status_code == 413
+    assert c.delete(PATH, headers={"If-Match": created.headers["etag"]}).status_code == 403
+
+
+def test_revision_race(tmp_path):
+    c = client(tmp_path)
+    register(c, "Alice")
+    made = c.put(PATH, content=b"start", headers={"Origin": ORIGIN, "If-Match": "*"})
+    assert made.status_code == 200
+    old = made.headers["etag"]
+    cookie = c.cookies.get(api_module.COOKIE)
+
+    def update(value):
+        peer = client(tmp_path)
+        peer.cookies.set(api_module.COOKIE, cookie)
+        return peer.put(PATH, content=value, headers={"Origin": ORIGIN, "If-Match": old})
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(update, (b"one", b"two")))
+    assert sorted(r.status_code for r in results) == [200, 412]
+    current = c.get(PATH)
+    assert current.content in (b"one", b"two")
+    assert current.headers["etag"] != old
+    assert c.put(PATH, content=b"clobber", headers={"Origin": ORIGIN, "If-Match": "*"}).status_code == 412
+    assert c.delete(PATH, headers={"Origin": ORIGIN, "If-Match": old}).status_code == 412
+    assert c.delete(PATH, headers={"Origin": ORIGIN, "If-Match": current.headers["etag"].strip('"')}).status_code == 200
+    assert c.get(PATH).status_code == 404
+
+
+def test_auth_bounds_and_peer_identity(tmp_path):
+    c = client(tmp_path, max_accounts=1, login_attempts=2, register_attempts=2)
+    assert c.get("/healthz").text == "ok\n"
+    assert c.get("/healthz").headers["cache-control"] == "private, no-store"
+    register(c, "Alice")
+    # A request header cannot choose a fresh rate-limit bucket.
+    for value in ("203.0.113.1", "203.0.113.2"):
+        r = c.post("/api/login", json={"username": "Alice", "password": "wrong password"},
+                   headers={"Origin": ORIGIN, "X-Forwarded-For": value})
+        assert r.status_code == 401
+    assert c.post("/api/login", json={"username": "Alice", "password": "long password 123"},
+                  headers={"Origin": ORIGIN, "X-Forwarded-For": "203.0.113.3"}).status_code == 429
+    assert c.post("/api/register", json={"username": "Bob", "password": "long password 123"},
+                  headers={"Origin": ORIGIN}).status_code == 403
+    assert c.post("/api/register", json={"username": "Carl", "password": "long password 123"},
+                  headers={"Origin": ORIGIN}).status_code == 429
+    c.cookies.set(api_module.COOKIE, "bad-non-ascii-%CE%A9")
+    assert c.get("/api/me").status_code == 401
+
+
+def test_trusted_proxy_header_is_strict(tmp_path):
+    c = client(tmp_path, login_attempts=1, trusted_proxy_ips="127.0.0.1")
+    assert c.post("/api/login", json={"username": "Alice", "password": "long password 123"},
+                  headers={"Origin": ORIGIN, "X-Real-IP": "203.0.113.5"}).status_code == 401
+    assert c.post("/api/login", json={"username": "Alice", "password": "long password 123"},
+                  headers={"Origin": ORIGIN, "X-Real-IP": "203.0.113.5"}).status_code == 429
+    assert c.post("/api/login", json={"username": "Alice", "password": "long password 123"},
+                  headers={"Origin": ORIGIN, "X-Real-IP": "203.0.113.6"}).status_code == 401
+    assert c.post("/api/login", json={"username": "Alice", "password": "long password 123"},
+                  headers={"Origin": ORIGIN, "X-Real-IP": "203.0.113.7, 203.0.113.8"}).status_code == 400
+
+
+def test_memory_sessions_are_explicit_isolated_and_revocable(tmp_path):
+    a = client(tmp_path, session_mode="memory")
+    registered = register(a, "Alice")
+    token = registered.json()["token"]
+    assert registered.json()["username"] == "Alice"
+    assert "set-cookie" not in registered.headers
+    assert not a.cookies
+    assert a.get("/api/me").status_code == 401
+    a.cookies.set(api_module.COOKIE, token)
+    rejected_cookie = a.get("/api/me")
+    assert rejected_cookie.status_code == 401
+    assert 'warblade_session=""' in rejected_cookie.headers["set-cookie"]
+    assert "Max-Age=0" in rejected_cookie.headers["set-cookie"]
+    assert token not in rejected_cookie.headers["set-cookie"]
+    assert a.post("/api/logout", headers={"Origin": ORIGIN}).status_code == 401
+    a.cookies.clear()
+    a.headers["Authorization"] = "Bearer " + token
+    assert a.get("/api/me").json() == {"username": "Alice"}
+    with sqlite3.connect(tmp_path / "state.sqlite3") as con:
+        digest = con.execute("SELECT token_hash FROM sessions").fetchone()[0]
+    assert digest == api_module.hashlib.sha256(token.encode("ascii")).digest()
+    made = a.put(PATH, content=b"alice save", headers={"Origin": ORIGIN, "If-Match": "*"})
+    assert made.status_code == 200
+    b = client(tmp_path, session_mode="memory")
+    b.headers["Authorization"] = "Bearer " + register(b, "Bob").json()["token"]
+    assert b.get("/api/saves").json() == {"files": []}
+    assert b.get(PATH).status_code == 404
+    assert b.delete(PATH, headers={"Origin": ORIGIN, "If-Match": made.headers["etag"]}).status_code == 404
+    assert a.put(PATH, content=b"wrong origin", headers={"Origin": "http://other", "If-Match": made.headers["etag"]}).status_code == 403
+    logout = a.post("/api/logout", headers={"Origin": ORIGIN})
+    assert logout.status_code == 200
+    assert "set-cookie" not in logout.headers
+    assert a.get(PATH).status_code == 401
+    assert a.get("/api/me").status_code == 401
+    assert b.get("/api/me").status_code == 200
+    login = a.post("/api/login", json={"username": "Alice", "password": "long password 123"},
+                   headers={"Origin": ORIGIN})
+    assert login.status_code == 200
+    assert "set-cookie" not in login.headers
+    assert login.json()["token"] != token
+    a.headers["Authorization"] = "Bearer " + login.json()["token"]
+    assert a.get(PATH).content == b"alice save"
+
+
+def test_memory_mode_keeps_legacy_saves_but_prevents_extra_profile_writes(tmp_path, monkeypatch):
+    legacy = client(tmp_path)
+    register(legacy, "Alice")
+    old_path = "/api/saves/warblade/profiles/profile001.acc"
+    old = legacy.put(old_path, content=b"existing profile", headers={"Origin": ORIGIN, "If-Match": "*"})
+    assert old.status_code == 200
+    monkeypatch.setenv("WARBLADE_SESSION_MODE", "memory")
+    c = client(tmp_path)
+    login = c.post("/api/login", json={"username": "Alice", "password": "long password 123"},
+                   headers={"Origin": ORIGIN})
+    c.headers["Authorization"] = "Bearer " + login.json()["token"]
+    assert c.get(old_path).content == b"existing profile"
+    assert c.get("/api/saves").json()["files"][0]["path"] == "warblade/profiles/profile001.acc"
+    assert c.put(old_path, content=b"overwrite", headers={"Origin": ORIGIN, "If-Match": old.headers["etag"]}).status_code == 400
+    for folder in ("profiles", "backup"):
+        for extension in ("acc", "wpl", "svg"):
+            allowed = f"/api/saves/warblade/{folder}/profile000.{extension}"
+            assert c.put(allowed, content=b"single profile", headers={"Origin": ORIGIN, "If-Match": "*"}).status_code == 200
+            for slot in ("001", "002", "999"):
+                denied = f"/api/saves/warblade/{folder}/profile{slot}.{extension}"
+                assert c.put(denied, content=b"extra profile", headers={"Origin": ORIGIN, "If-Match": "*"}).status_code == 400
+    assert c.put("/api/saves/warblade/settings.dat", content=b"settings", headers={"Origin": ORIGIN, "If-Match": "*"}).status_code == 200
+    assert c.get(old_path).content == b"existing profile"
+
+
+def test_memory_mode_preserves_auth_limits_and_validates_mode(tmp_path):
+    c = client(tmp_path, session_mode="memory", login_attempts=1)
+    register(c, "Alice")
+    fields = {"username": "Alice", "password": "wrong password"}
+    assert c.post("/api/login", json=fields, headers={"Origin": ORIGIN}).status_code == 401
+    fields["password"] = "long password 123"
+    assert c.post("/api/login", json=fields, headers={"Origin": ORIGIN}).status_code == 429
+    import pytest
+    with pytest.raises(ValueError, match="WARBLADE_SESSION_MODE"):
+        client(tmp_path, session_mode="local-storage")
+
+
+def _candidate(base, name, score):
+    raw = bytearray(hiscores.unpack(base))
+    offset = hiscores.TABLE_OFFSETS[0]
+    raw[offset:offset + len(name)] = name.encode()
+    struct.pack_into("<q", raw, offset + hiscores.SCORE_OFFSET, score)
+    return zlib.compress(raw)
+
+
+def test_concurrent_high_scores_merge_without_overwrite(tmp_path):
+    a = client(tmp_path)
+    register(a, "Alice")
+    b = client(tmp_path)
+    register(b, "Bob")
+    base = a.get("/api/hiscores")
+    assert base.status_code == 200
+    assert base.headers["etag"] == '"0"'
+
+    def submit(name, score, cookie):
+        peer = client(tmp_path)
+        peer.cookies.set(api_module.COOKIE, cookie)
+        return peer.post("/api/hiscores", content=_candidate(base.content, name, score),
+                         headers={"Origin": ORIGIN, "If-Match": base.headers["etag"]})
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda args: submit(*args), (
+            ("Alice", 1500, a.cookies.get(api_module.COOKIE)),
+            ("Bob", 2000, b.cookies.get(api_module.COOKIE)),
+        )))
+    assert [r.status_code for r in results] == [200, 200], [r.text for r in results]
+    rows = list(hiscores.entries(a.get("/api/hiscores").content))
+    assert [(r[2][:5].rstrip(b"\0"), r[1]) for r in rows] == [(b"Bob", 2000), (b"Alice", 1500)]
+    assert a.get("/api/saves").json()["files"] == []
+    assert a.put("/api/saves/warblade/warblade_132.his", content=base.content,
+                 headers={"Origin": ORIGIN, "If-Match": "*"}).status_code == 400
+    # A retry of the same candidate is idempotent; the board stays at version 2.
+    assert submit("Alice", 1500, a.cookies.get(api_module.COOKIE)).headers["etag"] == '"2"'

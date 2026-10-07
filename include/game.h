@@ -158,6 +158,16 @@ void UpdateMusicPos();
 void DrawFps();
 void DrawRow(int x, int y, int col, int count);
 void PlaySample();
+void ActivateProfile(int slot);
+#ifdef __EMSCRIPTEN__
+void WebNormalizeAccount(void);
+void WebProcessAccountQueue(void);
+void WebOpenLogin(int create);
+int WebQueueCredentials(const char *username, const char *password, int create);
+void WebQueueSignOut(void);
+int WebLoginMode(void);
+int WebAccountStatus(void);
+#endif
 void ClearAccount();
 void ResetAccount();
 int NextAccountReset();
@@ -559,6 +569,7 @@ void NewGame(bool resetLevel);
 // (0x5b3e10)
 void Logout();
 char KeyToChar(int key);
+void WaitForKeyRelease(int key);
 void ResetFlags();
 int CurMonth();
 int CurYear();
