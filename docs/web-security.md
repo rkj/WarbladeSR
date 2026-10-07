@@ -25,3 +25,5 @@ The API returns `Cache-Control: private, no-store` and downloaded saves have `ap
 The read-only game assets load before authentication so the native login screen can render. The public game has no second identity gateway. Private saves and high-score APIs require the in-memory bearer session, and game launch is blocked until the native login succeeds.
 
 Usernames are case-insensitive for both sign-in and registration uniqueness: `rkj`, `RkJ` and `RKJ` identify the same account and saved progress. The server returns the registered spelling; uppercase-only game fonts display its capital glyphs. Passwords remain case-sensitive.
+
+On touch devices, real browser inputs sit over the native login fields so a tap can open the mobile keyboard. They mirror edits into the game, mask passwords, and clear and blur when authentication starts or the dialog closes. Browser credentials stay in memory; the inputs disable autofill, capitalization and spellcheck. The game fits the visual viewport above the keyboard. Desktop input remains native.

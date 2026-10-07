@@ -527,7 +527,7 @@ function start() {
 
 var Module = {
   canvas: $('canvas'),
-  authenticateGame, signOutGame,
+  authenticateGame, signOutGame, syncLoginInputs,
   accountName: '', authError: '',
   onGameScoreWritten: () => queueMicrotask(() => persistSaves()),
   print: (t) => console.log(t),
@@ -549,6 +549,63 @@ var Module = {
 
   },
 };
+
+// A canvas is not editable: mobile keyboards require a real input focused by
+// the tap itself. Keep these fields over the native art, with no extra login UI.
+const loginInputs = [$('login-name'), $('login-password')];
+let loginInputState = null;
+function syncLoginInputs(state) {
+  const mobile = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+  loginInputState = mobile ? state : null;
+  if (!loginInputState) {
+    for (const input of loginInputs) {
+      if (document.activeElement === input) input.blur();
+      input.hidden = true;
+      input.value = '';
+    }
+    return;
+  }
+  const rect = $('canvas').getBoundingClientRect();
+  const scaleX = rect.width / state.screenW, scaleY = rect.height / state.screenH;
+  loginInputs.forEach((input, field) => {
+    const value = field ? state.password : state.name;
+    if (input.value !== value) input.value = value;
+    input.style.left = (rect.left + state.x * scaleX) + 'px';
+    input.style.top = (rect.top + (state.y + field * 25) * scaleY) + 'px';
+    input.style.width = (state.width * scaleX) + 'px';
+    input.style.height = (20 * scaleY) + 'px';
+    input.hidden = false;
+  });
+}
+loginInputs.forEach((input, field) => {
+  const update = () => {
+    if (runtimeReady && loginInputState)
+      Module.ccall('WebSetLoginField', 'number', ['number', 'string'], [field, input.value]);
+  };
+  input.addEventListener('focus', update);
+  input.addEventListener('input', update);
+  // Let the DOM input handle typing, editing and paste without SDL or the
+  // desktop bridge inserting the same characters a second time.
+  for (const event of ['keydown', 'keyup', 'keypress', 'paste'])
+    input.addEventListener(event, e => {
+      e.stopPropagation();
+      if (event === 'keydown' && e.key === 'Enter' && !e.isComposing) {
+        e.preventDefault();
+        if (field === 0) loginInputs[1].focus({preventScroll: true});
+        else if (Module.ccall('WebSubmitLogin', 'number', [], [])) syncLoginInputs(null);
+      }
+    });
+});
+// Fit the game above the keyboard, including browsers that resize only the
+// visual viewport; the native callback realigns inputs with the scaled canvas.
+function fitGameViewport() {
+  const height = window.visualViewport?.height || window.innerHeight;
+  document.documentElement.style.setProperty('--game-height', height + 'px');
+  if (loginInputState) syncLoginInputs(loginInputState);
+}
+window.visualViewport?.addEventListener('resize', fitGameViewport);
+window.addEventListener('resize', fitGameViewport);
+fitGameViewport();
 
 // The native game historically maps text to uppercase. Account passwords need
 // actual browser text, including case, punctuation and paste.

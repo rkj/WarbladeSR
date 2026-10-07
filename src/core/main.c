@@ -57,6 +57,57 @@ EMSCRIPTEN_KEEPALIVE int WebLoginReady(void)
     return webLoginVisible && !webAuthBusy && AnyWindowHasEdit();
 }
 
+// Real browser inputs cover the native fields on touch devices. Focus must happen
+// directly from the user's tap so mobile browsers can summon their keyboard.
+static Window *WebLoginWindow(void)
+{
+    if (!WebLoginReady()) return NULL;
+    for (int w = 0; w < MAX_WINDOWS; w++) {
+        Window *window = &g_windows[w];
+        if (window->active && window->visible && window->nH == 1)
+            return window;
+    }
+    return NULL;
+}
+
+EM_JS(void, WebSyncLoginInputs, (int visible, int x, int y, int width,
+                              int focus, int screenW, int screenH,
+                              const char *name, const char *password), {
+    if (Module.syncLoginInputs) Module.syncLoginInputs(visible ? {
+        x, y, width, focus, screenW, screenH,
+        name: UTF8ToString(name), password: UTF8ToString(password)
+    } : null);
+});
+
+static void WebUpdateLoginInputs(void)
+{
+    Window *window = WebLoginWindow();
+    if (!window) {
+        WebSyncLoginInputs(0, 0, 0, 0, 0, 0, 0, NULL, NULL);
+        return;
+    }
+    int x = window->x == POS_CENTERED ? (g_screenW - window->w) / 2 : window->x;
+    int y = window->y == POS_CENTERED ? (g_screenH - window->h) / 2 : window->y;
+    WebSyncLoginInputs(1, x + window->edits[0].x + (int)window->slideX,
+                      y + window->edits[0].y, window->w - window->edits[0].x - 24,
+                      window->firstH, g_screenW, g_screenH,
+                      window->edits[0].buf, window->edits[1].buf);
+}
+
+EMSCRIPTEN_KEEPALIVE int WebSetLoginField(int field, const char *text)
+{
+    Window *window = WebLoginWindow();
+    if (!window || field < 0 || field > 1 || !text) return 0;
+    size_t length = strlen(text);
+    if (length > (size_t)window->edits[field].len) return 0;
+    memset(window->edits[field].buf, 0, sizeof(window->edits[field].buf));
+    memcpy(window->edits[field].buf, text, length);
+    window->edits[field].cursor = (int)length;
+    window->firstH = field;
+    for (int e = 0; e < 2; e++) window->edits[e].focused = e == field;
+    return 1;
+}
+
 // Browser text events preserve password case, punctuation and pasted text.
 // This synchronous bridge only edits the visible login field; authentication
 // remains queued on the game's main loop.
@@ -91,6 +142,13 @@ EMSCRIPTEN_KEEPALIVE int WebQueueCredentials(const char *username, const char *p
     webLoginCreate = !!create;
     webAuthQueued = 1;
     return 1;
+}
+
+EMSCRIPTEN_KEEPALIVE int WebSubmitLogin(void)
+{
+    Window *window = WebLoginWindow();
+    return window ? WebQueueCredentials(window->edits[0].buf,
+                                        window->edits[1].buf, webLoginCreate) : 0;
 }
 
 EMSCRIPTEN_KEEPALIVE void WebQueueSignOut(void)
@@ -136,6 +194,7 @@ static void WebShowLogin(int create)
 // from a second exported async stack while its frame loop is suspended.
 void WebProcessAccountQueue(void)
 {
+    WebUpdateLoginInputs();
     if (webSignOutQueued) {
         webSignOutQueued = 0;
         WebSaveSettings();
@@ -159,6 +218,7 @@ void WebProcessAccountQueue(void)
     WinCloseAll();
     g_curWin = WinOpen(POS_CENTERED, POS_CENTERED, 420, 90, WIN_MODE_SLIDING);
     WinAddText(POS_CENTERED, 30, g_curWin, webLoginCreate ? "CREATING PLAYER..." : "SIGNING IN...", 8);
+    WebUpdateLoginInputs();
     int ok = WebAuthenticate(webLoginUsername, webLoginPassword, webLoginCreate);
     memset(webLoginPassword, 0, sizeof(webLoginPassword));
     WebReadIdentity(webAccountName, sizeof(webAccountName), webAuthError, sizeof(webAuthError));
@@ -192,6 +252,7 @@ void WebProcessAccountQueue(void)
             webLoginVisible = 0;
             webAuthError[0] = 0;
             WinCloseAll();
+            WebUpdateLoginInputs();
             g_clickWin = g_clickItem = -1;
             return;
         }
