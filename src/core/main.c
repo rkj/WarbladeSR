@@ -17,6 +17,8 @@ static int webLoginPending = -1;
 static int webLoginCreate;
 static int webAuthQueued;
 static int webAuthBusy;
+// The legacy login flag also tracks the welcome sound; keep web UI state separate.
+static int webLoginVisible;
 static int webSignOutQueued;
 static char webLoginUsername[33];
 static char webLoginPassword[257];
@@ -52,7 +54,7 @@ EMSCRIPTEN_KEEPALIVE int WebGameReady(void)
 
 EMSCRIPTEN_KEEPALIVE int WebLoginReady(void)
 {
-    return g_loginWinOpen && !webAuthBusy && AnyWindowHasEdit();
+    return webLoginVisible && !webAuthBusy && AnyWindowHasEdit();
 }
 
 // Browser text events preserve password case, punctuation and pasted text.
@@ -111,7 +113,7 @@ static void WebShowLogin(int create)
     WinAddText(30, 75, g_curWin, "PASSWORD :", 8);
     WinAddEdit(150, 75, g_curWin, 256, 1, 7, 0);
     WinAddText(30, 108, g_curWin, "PLAYER NAME: 3-32 LETTERS, NUMBERS, DOT, _ OR -", 7);
-    WinAddText(30, 124, g_curWin, "PASSWORD: 12-256 CHARACTERS", 7);
+    WinAddText(30, 124, g_curWin, "PASSWORD: 8-256 CHARACTERS", 7);
     WinAddText(30, 140, g_curWin, "PROGRESS IS SAVED TO YOUR SERVER ACCOUNT", 7);
     if (webAuthError[0]) {
         char line[70];
@@ -126,6 +128,7 @@ static void WebShowLogin(int create)
     WinAddMenuItem(340, 210, g_curWin, 9001, create ? "SIGN IN INSTEAD" : "CREATE PLAYER", 5);
     WinSetSelected(g_curWin, 9000);
     g_loginWinOpen = 1;
+    webLoginVisible = 1;
     g_clickWin = g_clickItem = -1;
 }
 
@@ -186,6 +189,7 @@ void WebProcessAccountQueue(void)
             ClearAccount();
             webAccountStatus = 1;
             g_loginWinOpen = 0;
+            webLoginVisible = 0;
             webAuthError[0] = 0;
             WinCloseAll();
             g_clickWin = g_clickItem = -1;
@@ -212,7 +216,7 @@ EMSCRIPTEN_KEEPALIVE int WebAccountStatus(void)
 {
     if (webAccountStatus != 1)
         return webAccountStatus;
-    if (g_profileIndex != 0 || g_profileCount != 1 || !g_loggedIn || g_loginWinOpen)
+    if (g_profileIndex != 0 || g_profileCount != 1 || !g_loggedIn || webLoginVisible)
         return -1;
     // Inspect a private copy; diagnostics must not disturb the game's g_acc scratch.
     Account account;

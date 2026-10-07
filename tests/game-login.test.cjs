@@ -54,13 +54,20 @@ test('native login/create, one server profile, reload persistence and account is
     await nativeKey(alice.page, 'Tab');
     await nativeType(alice.page, 'short');
     await nativeKey(alice.page, 'Enter');
-    await alice.page.waitForFunction(() => Module.authError.includes('12-256'), null,{timeout:10000});
+    await alice.page.waitForFunction(() => Module.authError.includes('8-256'), null,{timeout:10000});
     await alice.page.waitForFunction(() => Module._WebLoginReady() === 1);
     await nativeKey(alice.page, 'Tab');
     await nativeType(alice.page, secret);
     await nativeKey(alice.page, 'Enter');
     await alice.page.waitForFunction(() => Module._WebAccountStatus() === 1, null,{timeout:60000});
     assert.equal(await alice.page.evaluate(() => Module.accountName), 'webtester');
+    // The welcome sound must not invalidate the authenticated account.
+    await alice.page.waitForTimeout(1500);
+    assert.equal(await alice.page.evaluate(() => Module._WebAccountStatus()), 1);
+    await nativeKey(alice.page, 'F1');
+    await alice.page.waitForTimeout(1500);
+    assert.equal(await alice.page.evaluate(() => Module._WebAccountStatus()), 1);
+    assert.equal(await alice.page.evaluate(() => Module._WebLoginReady()), 0);
     await alice.page.evaluate(() => { Module._WebSaveSettings(); });
     await alice.page.evaluate(() => persistSaves());
     assert.equal(await alice.page.locator('#save-alert').isHidden(), true);

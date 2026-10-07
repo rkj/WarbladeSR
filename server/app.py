@@ -226,7 +226,7 @@ def create_app(db_path: str | Path, public_origin: str, *, secure_cookie: bool |
         except (ValueError, TypeError, KeyError):
             raise HTTPException(400, "Invalid credentials") from None
         if (not isinstance(username, str) or not USERNAME.fullmatch(username) or
-                not isinstance(password, str) or not 12 <= len(password) <= 256):
+                not isinstance(password, str) or not 8 <= len(password) <= 256):
             raise HTTPException(400, "Invalid credentials")
         return username, password
 
