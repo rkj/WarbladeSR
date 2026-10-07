@@ -145,40 +145,24 @@ cd build/linux-release && ./warblade
 
 ### Browser
 
-The same code also builds to WebAssembly with [Emscripten](https://emscripten.org) and runs in a web page. The build has no game data: the page asks for your Warblade 1.34 folder, copies its `data` into the browser, and keeps it there (IndexedDB), so you only choose it once. Nothing is uploaded.
+The same code also builds to WebAssembly with [Emscripten](https://emscripten.org). Game assets may be supplied by the server or selected locally; all assets stay in memory for the current page visit. Each player account owns exactly one game profile; profiles, settings and saves are stored on the server. The six high-score tables are shared and merged transactionally on the server, including when players finish at the same time.
 
 ```sh
 source /path/to/emsdk/emsdk_env.sh
 ./build-web.sh
-python3 -m http.server -d build/web 8000     # then open http://localhost:8000
 ```
 
-- `build-web.sh` builds zlib, SDL3, SDL3_image and SDL3_mixer for WebAssembly into `build/deps-web` the first time, then the game into `build/web` (`index.html`, `warblade.js`, `warblade.wasm`). The page (`web/index.html`) has to be served over HTTP; opening the file directly won't load the WebAssembly.
-- The game keeps its blocking main loop thanks to Asyncify: `SysFlip` and `AudioUpdate` yield to the browser.
-- Saves, profiles and settings live in the browser too (`/save`, kept in IndexedDB). The page saves the settings every few seconds and when the tab is hidden, since players close the tab rather than quit.
-- Touch screens get an on-screen stick with FIRE, ROCKET and PAUSE buttons (shown on phones and tablets, or on a laptop's first touch). Gamepads work in the browser too, once you press a button on them.
-- It starts inside the page; `W` (or the settings page) switches to fullscreen. Frame interpolation is off in the browser.
+The page opens directly into a title-art loading view and starts the game automatically. The container serves that artwork from the mounted game archive; it is not bundled in the image. Once loaded, the native sign-in screen takes over.
+
+The page needs the account API and a same-origin reverse proxy; opening `build/web/index.html` directly or serving it with `python -m http.server` will not provide saves. The game runs its blocking loop with Asyncify. Touch controls and gamepads work in the browser.
 
 ### Docker
 
-The browser version can also be served from a Docker image, with the game data and the saves on the server: players just open the page, and their profiles, saves, settings and high scores live in a volume. The image has no game data; you mount your own.
+`docker compose up --build -d` starts the static game, account API and a local Caddy proxy at `http://localhost:8080`. Put your own Warblade 1.34 assets in `game/data` first. The API database lives in the persistent `api-state` volume. Back it up with SQLite's online backup API or `sqlite3 .backup`, rather than copying a live WAL file alone.
 
-```sh
-docker build -t warblade-sr .
-docker run -d -p 8080:8080 \
-    -v /path/to/Warblade/data:/data:ro \
-    -v warblade-saves:/saves \
-    warblade-sr
-```
+The GitHub workflow is configured to publish `ghcr.io/rkj/warbladesr` (static game) and `ghcr.io/rkj/warbladesr-api` (account API) after these changes reach upstream `main`. Pin the same source commit for both images. The static image accepts only GET and HEAD; route `/api/*` to the API container through a reverse proxy at the same origin. Set `WARBLADE_PUBLIC_ORIGIN` to that exact HTTPS origin in a public deployment, keep the API database private, and set `WARBLADE_TRUSTED_PROXY_IPS` only if the proxy overwrites `X-Real-IP` and its peer address is stable. Set `WARBLADE_SESSION_MODE=memory` for the browser page: the API uses Argon2id password hashes and returns a bearer session token held only in page memory; its save paths are account-scoped and checked with revisions.
 
-Then open http://localhost:8080. `docker-compose.yml` does the same with `docker compose up -d`.
-
-Instead of building it, you can pull the image GitHub Actions builds from `main` (`.github/workflows/docker.yml`): `ghcr.io/rkj/warbladesr:latest`, also tagged `main` and `sha-<commit>`. While the package is private, log in first with a GitHub token that has `read:packages`: `docker login ghcr.io -u <github user>`.
-
-- `/data`: your Warblade 1.34 `data` folder (with `warblade.pac`, `music`, `samples`), read-only. Mounting the whole installation folder works too.
-- `/saves`: the game's user folder. The page loads it into the game, and every few seconds (and when the tab is hidden) sends back the files the game changed, so saves follow you between browsers and devices.
-- The saves are shared by everyone using the server, like one PC: players get their own profiles in the game's profile menu. Two people playing at the same time can overwrite each other's settings file.
-- The server is `docker/server.py` (Python standard library). The build stage runs `build-web.sh` in the official Emscripten image.
+The browser game's built-in player sign-in/create window authenticates with the server and loads its single profile. It has no second password or profile selector; its existing profile screen remains available for stats, reset, backup and restore. Reloading requires a fresh server login. High scores are submitted by the browser, so the shared table prevents lost updates but cannot prove that a score was earned without server-validated gameplay. See `docs/web-security.md` for the security boundary and limits.
 
 
 # Used libraries

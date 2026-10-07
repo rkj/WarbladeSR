@@ -9,6 +9,9 @@
 #include "globals.h"
 #include "game.h"
 #include <zlib.h>
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 
 // warblade_132.his, zlib-packed: the six tables and each table's #1 run's level records, as the
 // original kept them in memory (0xa1558 bytes from 0xc39380). The game keeps them in
@@ -817,6 +820,10 @@ void WriteHiscoreFile()
             g_fileWriteErrorFlag = 0;
         }
         _close(fd);
+#ifdef __EMSCRIPTEN__
+        // Hand the new candidate to the page immediately; it is merged by the server.
+        EM_ASM({ if (Module.onGameScoreWritten) Module.onGameScoreWritten(); });
+#endif
     }
 }
 

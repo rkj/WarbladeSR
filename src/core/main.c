@@ -3,9 +3,230 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <string.h>
 #include "globals.h"
 #include "game.h"
 #include "sdlhelp.h"
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#include <zlib.h>
+static char webAccountName[30];
+static int webAccountStatus;
+static int webGameReady;
+static int webLoginPending = -1;
+static int webLoginCreate;
+static int webAuthQueued;
+static int webAuthBusy;
+static int webSignOutQueued;
+static char webLoginUsername[33];
+static char webLoginPassword[257];
+static char webAuthError[193];
+void WebSaveSettings(void);
+
+EM_ASYNC_JS(int, WebAuthenticate, (const char *username, const char *password, int create), {
+    try {
+        return await Module.authenticateGame(UTF8ToString(username), UTF8ToString(password), !!create) ? 1 : 0;
+    } catch (error) {
+        Module.authError = error.message || 'Could not connect. Please try again.';
+        return 0;
+    }
+});
+EM_JS(void, WebReadIdentity, (char *name, int capacity, char *error, int errorCapacity), {
+    stringToUTF8(Module.accountName || '', name, capacity);
+    stringToUTF8(Module.authError || 'Could not sign in. Please try again.', error, errorCapacity);
+});
+EM_ASYNC_JS(void, WebSignOut, (), {
+    await Module.signOutGame();
+});
+
+EMSCRIPTEN_KEEPALIVE void WebOpenLogin(int create)
+{
+    if (!webAuthBusy)
+        webLoginPending = !!create;
+}
+
+EMSCRIPTEN_KEEPALIVE int WebGameReady(void)
+{
+    return webGameReady;
+}
+
+EMSCRIPTEN_KEEPALIVE int WebLoginReady(void)
+{
+    return g_loginWinOpen && !webAuthBusy && AnyWindowHasEdit();
+}
+
+// Browser text events preserve password case, punctuation and pasted text.
+// This synchronous bridge only edits the visible login field; authentication
+// remains queued on the game's main loop.
+EMSCRIPTEN_KEEPALIVE int WebInsertLoginText(const char *text)
+{
+    if (!WebLoginReady() || !text)
+        return 0;
+    for (int w = 0; w < MAX_WINDOWS; w++) {
+        Window *window = &g_windows[w];
+        if (!window->active || !window->visible || window->nH < 0
+            || window->firstH < 0 || window->firstH > window->nH)
+            continue;
+        int e = window->firstH;
+        size_t length = strlen(text);
+        int available = window->edits[e].len - window->edits[e].cursor;
+        if (length > (size_t)available)
+            return 0;
+        memcpy(window->edits[e].buf + window->edits[e].cursor, text, length + 1);
+        window->edits[e].cursor += (int)length;
+        return 1;
+    }
+    return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE int WebQueueCredentials(const char *username, const char *password, int create)
+{
+    if (webAuthBusy || webAuthQueued || webAccountStatus == 1
+        || !username || !password || strlen(username) > 32 || strlen(password) > 256)
+        return 0;
+    snprintf(webLoginUsername, sizeof(webLoginUsername), "%s", username);
+    snprintf(webLoginPassword, sizeof(webLoginPassword), "%s", password);
+    webLoginCreate = !!create;
+    webAuthQueued = 1;
+    return 1;
+}
+
+EMSCRIPTEN_KEEPALIVE void WebQueueSignOut(void)
+{
+    if (webAccountStatus == 1)
+        webSignOutQueued = 1;
+}
+
+static void WebShowLogin(int create)
+{
+    webLoginCreate = !!create;
+    WinCloseAll();
+    WinHideAll();
+    g_curWin = WinOpen(POS_CENTERED, POS_CENTERED, 640, 250, WIN_MODE_SLIDING);
+    WinAddText(POS_CENTERED, 20, g_curWin, create ? "CREATE PLAYER" : "PLAYER SIGN IN", 8);
+    WinAddText(30, 50, g_curWin, "PLAYER NAME :", 8);
+    WinAddEdit(150, 50, g_curWin, 32, 0, 7, 1);
+    snprintf(g_windows[g_curWin].edits[0].buf, sizeof(g_windows[g_curWin].edits[0].buf), "%s", webLoginUsername);
+    g_windows[g_curWin].edits[0].cursor = (int)strlen(webLoginUsername);
+    WinAddText(30, 75, g_curWin, "PASSWORD :", 8);
+    WinAddEdit(150, 75, g_curWin, 256, 1, 7, 0);
+    WinAddText(30, 108, g_curWin, "PLAYER NAME: 3-32 LETTERS, NUMBERS, DOT, _ OR -", 7);
+    WinAddText(30, 124, g_curWin, "PASSWORD: 12-256 CHARACTERS", 7);
+    WinAddText(30, 140, g_curWin, "PROGRESS IS SAVED TO YOUR SERVER ACCOUNT", 7);
+    if (webAuthError[0]) {
+        char line[70];
+        snprintf(line, sizeof(line), "%.68s", webAuthError);
+        WinAddText(30, 162, g_curWin, line, 4);
+        if (strlen(webAuthError) > 68) {
+            snprintf(line, sizeof(line), "%.68s", webAuthError + 68);
+            WinAddText(30, 178, g_curWin, line, 4);
+        }
+    }
+    WinAddMenuItem(30, 210, g_curWin, 9000, create ? "CREATE PLAYER" : "SIGN IN", 5);
+    WinAddMenuItem(340, 210, g_curWin, 9001, create ? "SIGN IN INSTEAD" : "CREATE PLAYER", 5);
+    WinSetSelected(g_curWin, 9000);
+    g_loginWinOpen = 1;
+    g_clickWin = g_clickItem = -1;
+}
+
+// Run asynchronous authentication only from the game's own main loop, never
+// from a second exported async stack while its frame loop is suspended.
+void WebProcessAccountQueue(void)
+{
+    if (webSignOutQueued) {
+        webSignOutQueued = 0;
+        WebSaveSettings();
+        WebSignOut();
+        return;
+    }
+    if (webLoginPending >= 0) {
+        int create = webLoginPending;
+        webLoginPending = -1;
+        WebShowLogin(create);
+    }
+    if (!webAuthQueued || webAuthBusy)
+        return;
+    webAuthQueued = 0;
+    webAuthBusy = 1;
+    // Clear all visible password copies before yielding to the server.
+    for (int w = 0; w < MAX_WINDOWS; w++)
+        for (int e = 0; e <= g_windows[w].nH; e++)
+            if (g_windows[w].edits[e].masked)
+                memset(g_windows[w].edits[e].buf, 0, sizeof(g_windows[w].edits[e].buf));
+    WinCloseAll();
+    g_curWin = WinOpen(POS_CENTERED, POS_CENTERED, 420, 90, WIN_MODE_SLIDING);
+    WinAddText(POS_CENTERED, 30, g_curWin, webLoginCreate ? "CREATING PLAYER..." : "SIGNING IN...", 8);
+    int ok = WebAuthenticate(webLoginUsername, webLoginPassword, webLoginCreate);
+    memset(webLoginPassword, 0, sizeof(webLoginPassword));
+    WebReadIdentity(webAccountName, sizeof(webAccountName), webAuthError, sizeof(webAuthError));
+    webAuthBusy = 0;
+    if (ok && webAccountName[0]) {
+        g_profileIndex = -1;
+        g_profileCount = 0;
+        LoadSettings();
+        ScanProfiles();
+        if (g_profileCount > 1) {
+            webAccountStatus = -1;
+            snprintf(webAuthError, sizeof(webAuthError), "Multiple saved profiles need migration. Progress has been preserved.");
+        } else {
+            if (!g_profileCount) {
+                NextAccountReset();
+                ResetAccount();
+            } else {
+                UnpackAccount(0);
+            }
+            WebNormalizeAccount();
+            PackAccount(0);
+            SaveAccount(0);
+            g_selProfile = g_cfg.profileSel = 0;
+            LoadHiscores();
+            LoadBestScore();
+            UnpackAccount(0);
+            ActivateProfile(0);
+            ClearAccount();
+            webAccountStatus = 1;
+            g_loginWinOpen = 0;
+            webAuthError[0] = 0;
+            WinCloseAll();
+            g_clickWin = g_clickItem = -1;
+            return;
+        }
+    }
+    WebShowLogin(webLoginCreate);
+}
+
+int WebLoginMode(void)
+{
+    return webLoginCreate;
+}
+
+// Apply the server identity to an already unpacked profile, including old backups.
+void WebNormalizeAccount(void)
+{
+    snprintf(g_acc.name, sizeof(g_acc.name), "%s", webAccountName);
+    memset(g_acc.password, 0, sizeof(g_acc.password));
+    g_acc.settings.profileSel = 0;
+}
+
+EMSCRIPTEN_KEEPALIVE int WebAccountStatus(void)
+{
+    if (webAccountStatus != 1)
+        return webAccountStatus;
+    if (g_profileIndex != 0 || g_profileCount != 1 || !g_loggedIn || g_loginWinOpen)
+        return -1;
+    // Inspect a private copy; diagnostics must not disturb the game's g_acc scratch.
+    Account account;
+    uLongf length = sizeof(account);
+    if (uncompress((unsigned char *)&account, &length,
+                   (const unsigned char *)&g_accBuf[0], sizeof(account)) != Z_OK
+        || length != sizeof(account) || strcmp(account.name, webAccountName))
+        return -1;
+    for (unsigned int i = 0; i < sizeof(account.password); i++)
+        if (account.password[i])
+            return -1;
+    return 1;
+}
+#endif
 
 
 // The program's `main`: the CRT's mainCRTStartup calls it with (argc, argv, envp), which it
@@ -274,6 +495,7 @@ int GameMain()
     CheckTimeTrialAvailable();
     BufferAllLevels();
     LogPrint("Preoading of all level data is passed...\r\n");
+#ifndef __EMSCRIPTEN__
     // The close box works from here on: the splashes end early and the main loop never runs.
     if (!SysQuitRequested())
         ShowLogoSplash();
@@ -281,6 +503,11 @@ int GameMain()
     if (!SysQuitRequested())
         ShowTitleSplash();
     LogPrint("Game splash is passed...\r\n");
+
+#else
+    // The web loading view already shows the original title artwork. Avoid a
+    // second pair of hidden splashes before the native account screen.
+#endif
 
     // Menu/intro state, then the login/profile prompts shown before the title screen.
     g_mouseDown = 0;
@@ -296,6 +523,9 @@ int GameMain()
     }
     g_loginWinOpen = 0;
     g_loggedIn = 0;
+#ifdef __EMSCRIPTEN__
+    WebOpenLogin(0);
+#else
     // ---- default-account login window (a profile is selected and remembered) ----
     if (g_cfg.profileSel != -1) {
         GetProfileName(g_cfg.profileSel);
@@ -311,6 +541,7 @@ int GameMain()
         WinAddMenuItem(0x168, 0x4b, g_curWin, 0x9f6, "CANCEL", 6);
         g_loginWinOpen = 1;
     }
+#endif
     LogPrint("Default account? is passed...\r\n");
 
     // ---- "no valid user profiles found" error window ----
@@ -344,6 +575,9 @@ int GameMain()
     g_cfg.fps = 60;
     DoNothing();
     g_saveMagic = 12345;
+#ifdef __EMSCRIPTEN__
+    webGameReady = 1;
+#endif
 
     // Main loop: input, GameFrame, render/present, repeat until the window quits.
     while (!SysQuitRequested()) {
@@ -456,6 +690,7 @@ bool GameInit()
     LoadSettings();
     g_noProfilesError = 0;
     ScanProfiles();
+
     if (g_cfg.profileSel != -1)
         g_windowed = GetProfileCfgFlag(g_cfg.profileSel);
     if (SysDesktopWidth() <= (int)g_screenW)  // desktop too narrow to run windowed
@@ -641,6 +876,17 @@ EMSCRIPTEN_KEEPALIVE void WebSaveSettings(void)
 {
     MergeSettings(g_profileIndex);
     WriteSettings();
+}
+
+// The page replaces the in-memory file with the server's transactionally merged board.
+// Avoid reloading during name entry, when the game is still updating its local candidate.
+EMSCRIPTEN_KEEPALIVE int WebReloadHiscores(void)
+{
+    if (g_state == STATE_ENTER_HISCORE)
+        return 0;
+    LoadHiscores();
+    LoadBestScore();
+    return 1;
 }
 #endif
 

@@ -764,7 +764,9 @@ void Shop()
                     MergeSettings(g_profileIndex);
                     DeleteSetPro();
                     ClearAccount();
+#ifndef __EMSCRIPTEN__
                     g_profileIndex = -1;
+#endif
                     PlaySample();
                     g_quitGameWinOpen = 0;
                     ResetToTitle();

@@ -532,7 +532,7 @@ const char *SysUserFolder(void)
     if (folder[0] == 0) {
         const char *docs = SDL_GetUserFolder(SDL_FOLDER_DOCUMENTS);
 #ifdef __EMSCRIPTEN__
-        // The page keeps this folder in IndexedDB (web/index.html).
+        // The page keeps this folder in memory; durable saves belong to the server account.
         docs = "/save";
 #elif !defined(_WIN32)
         // Not every Linux home has a Documents folder.

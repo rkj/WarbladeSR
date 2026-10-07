@@ -1481,6 +1481,10 @@ void ProfileWindow(bool noButtons)
         WinAddText(POS_CENTERED, h - 50, g_curWin, "PRESS TAB TO CLOSE WINDOW", 8);
     } else {
         if (!g_newGameOnClose && g_state == STATE_TITLE && !g_profileReadOnly) {
+#ifdef __EMSCRIPTEN__
+            WinAddMenuItem(25, h - 55, g_curWin, 0x106, "SIGN OUT", 5);
+            WinAddMenuItem(150, h - 55, g_curWin, 0x108, "PLAYLIST", 5);
+#else
             WinAddMenuItem(25, h - 55, g_curWin, 0x106, "CLOSE PROFILE", 5);
             if (g_profileIndex == g_cfg.profileSel) {
                 WinAddMenuItem(150, h - 55, g_curWin, 0x107, "CLEAR AS DEFAULT", 5);
@@ -1489,11 +1493,14 @@ void ProfileWindow(bool noButtons)
                 WinAddMenuItem(150, h - 55, g_curWin, 0x107, "SET AS DEFAULT", 5);
                 WinAddMenuItem(283, h - 55, g_curWin, 0x108, "PLAYLIST", 5);
             }
+#endif
             WinAddMenuItem(25, h - 35, g_curWin, 0x109, "RESET", 5);
             WinAddMenuItem(82, h - 35, g_curWin, 0x10a, "BACKUP", 5);
             WinAddMenuItem(147, h - 35, g_curWin, 0x10b, "RESTORE", 5);
+#ifndef __EMSCRIPTEN__
             WinAddMenuItem(220, h - 35, g_curWin, 0x10c, "CHANGE NAME", 5);
             WinAddMenuItem(325, h - 35, g_curWin, 0x10d, "CHANGE PASSWORD", 5);
+#endif
         }
         WinAddMenuItem(w - 80, h - 35, g_curWin, 0xfc, "CLOSE", 5);
         WinSetSelected(g_curWin, 0xfc);

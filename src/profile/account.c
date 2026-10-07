@@ -1015,9 +1015,13 @@ void ProfileHistPush(int slot, __int64 v)
 void Logout()
 {
     MergeSettings(g_profileIndex);
+#ifndef __EMSCRIPTEN__
     DeleteSetPro();
+#endif
     ClearAccount();
+#ifndef __EMSCRIPTEN__
     g_profileIndex = -1;
+#endif
     PlaySample();
     WinCloseAll();
     g_clickWin = -1;

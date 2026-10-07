@@ -1580,6 +1580,13 @@ void GameFrame()
 // update functions for the current game mode before dropping into STATE_RESPAWN (new level).
 void NewGame(bool resetLevel)
 {
+#ifdef __EMSCRIPTEN__
+    if (WebAccountStatus() != 1) {
+        g_state = STATE_TITLE;
+        WebOpenLogin(0);
+        return;
+    }
+#endif
     // ---- reset per-run counters, timers and pause-duration bookkeeping ----
     g_warpMalfunctionCount = 0;
     g_malfunctionTimer = RandRange(-2000, 6000) + 21000;
