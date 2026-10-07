@@ -170,6 +170,14 @@ class Delivery(unittest.TestCase):
         self.assertEqual(body, b"")
         self.assertGreater(int(headers["content-length"]), 0)
 
+    def test_html_expires_legacy_cookie(self):
+        for path in ("/", "/?startup=1", "/index.html", "/index.html?startup=1"):
+            status, headers, _ = request("GET", path)
+            self.assertEqual(status, 200, path)
+            self.assertIn("warblade_session=; Path=/; Max-Age=0", headers.get("set-cookie", ""), path)
+        _, headers, _ = request("GET", "/page.js")
+        self.assertNotIn("set-cookie", headers)
+
     def test_security_headers(self):
         for path in ("/", "/warblade.wasm", "/data/", "/missing", "/data/missing"):
             _, headers, _ = request("GET", path)

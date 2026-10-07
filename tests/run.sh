@@ -142,6 +142,7 @@ EOF
 docker run -d --name "$name-proxy" --network "$network" -p 127.0.0.1:18085:8080 \
     --read-only --tmpfs /tmp --tmpfs /config --tmpfs /data \
     --cap-drop ALL --security-opt no-new-privileges \
+    --cap-add NET_BIND_SERVICE \
     -v "$fx/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2.10-alpine > /dev/null
 containers="$containers $name-proxy"
 
