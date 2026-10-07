@@ -263,7 +263,8 @@ expect: ui_AnyWindowActive_follows_the_table
 
 == ui: AnyWindowHasEdit counts closed windows
 file: src/ui/window.c
-- if (g_windows[i].active != 0 && g_windows[i].firstH != -1) {
+- if (g_windows[i].active && g_windows[i].visible && g_windows[i].nH >= 0
+-             && g_windows[i].firstH >= 0 && g_windows[i].firstH <= g_windows[i].nH) {
 + if (g_windows[i].firstH != -1) {
 expect: ui_AnyWindowHasEdit_ignores_closed_windows
 
@@ -321,14 +322,14 @@ expect: ui_WinDraw_texts_draw_glyphs
 
 == ui: WinDraw underscores from 0
 file: src/ui/window.c
-- for (c = W.edits[h].cursor; c < W.edits[h].len; c++) {
-+ for (c = 0; c < W.edits[h].len; c++) {
+- for (c = displayCursor; c < visibleLen; c++) {
++ for (c = 0; c < visibleLen; c++) {
 expect: ui_WinDraw_masked_edit_shows_stars
 
 == ui: WinDraw one star too many
 file: src/ui/window.c
-- for (z = 0; z < StrLenPlat(W.edits[h].buf); z++) {
-+ for (z = 0; z <= StrLenPlat(W.edits[h].buf); z++) {
+- for (z = 0; z < StrLenPlat(displayText); z++) {
++ for (z = 0; z <= StrLenPlat(displayText); z++) {
 expect: ui_WinDraw_masked_edit_shows_stars
 
 == ui: WinDraw blink step
@@ -1636,13 +1637,13 @@ file: src/ui/menu.c
 -             }
 -         }
 -         if (ok) {
--             g_loggedIn = 1;
+-             ActivateProfile(g_selProfile);
 +                 if (g_acc.password[k] != g_windows[g_clickWin].edits[0].buf[k])
 +                     ;
 +             }
 +         }
 +         if (ok) {
-+             g_loggedIn = 1;
++             ActivateProfile(g_selProfile);
 expect: ui_Menu_wrong_password_clears_the_field
 
 == ui: login ignores the length
@@ -1656,7 +1657,7 @@ file: src/ui/menu.c
 -             }
 -         }
 -         if (ok) {
--             g_loggedIn = 1;
+-             ActivateProfile(g_selProfile);
 +         if (0) {
 +             ok = false;
 +         } else {
@@ -1666,7 +1667,7 @@ file: src/ui/menu.c
 +             }
 +         }
 +         if (ok) {
-+             g_loggedIn = 1;
++             ActivateProfile(g_selProfile);
 expect: ui_Menu_wrong_password_clears_the_field
 
 == ui: wrong password keeps the cursor
@@ -1677,17 +1678,17 @@ expect: ui_Menu_wrong_password_clears_the_field
 
 == ui: login keeps the old profile
 file: src/ui/menu.c
--             g_loggedIn = 1;
--             g_profileIndex = g_selProfile;
-+             g_loggedIn = 1;
+-     g_loggedIn = 1;
+-     g_profileIndex = slot;
++     g_loggedIn = 1;
 expect: ui_Menu_use_profile_logs_in_with_the_password
 
 == ui: easy profile login keeps the difficulty
 file: src/ui/menu.c
--             if (g_cfg.difficulty != DIFF_EASY && g_acc.easy != 0) {
--                 g_cfg.difficulty = DIFF_EASY;
-+             if (g_cfg.difficulty != DIFF_EASY && g_acc.easy != 0) {
-+                 g_cfg.difficulty = DIFF_NORMAL;
+-     if (g_cfg.difficulty != DIFF_EASY && g_acc.easy != 0) {
+-         g_cfg.difficulty = DIFF_EASY;
++     if (g_cfg.difficulty != DIFF_EASY && g_acc.easy != 0) {
++         g_cfg.difficulty = DIFF_NORMAL;
 expect: ui_Menu_easy_profile_forces_easy_difficulty_on_login
 
 == ui: CLOSE keeps the window

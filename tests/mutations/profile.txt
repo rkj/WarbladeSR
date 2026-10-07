@@ -962,15 +962,13 @@ expect: Profile_Logout_saves_settings_and_leaves_the_profile
 == profile: Logout keeps profile index
 file: src/profile/account.c
 -     g_profileIndex = -1;
--     PlaySample();
-+     PlaySample();
++     ;
 expect: Profile_Logout_saves_settings_and_leaves_the_profile
 
 == profile: Logout skips merge
 file: src/profile/account.c
 -     MergeSettings(g_profileIndex);
--     DeleteSetPro();
-+     DeleteSetPro();
++     ;
 expect: Profile_Logout_saves_settings_and_leaves_the_profile
 
 == profile: Logout leaves window flag
