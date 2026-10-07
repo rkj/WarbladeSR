@@ -43,6 +43,7 @@ async function bridgePage(browser) {
       readFile: p => entries.get(p),
     };
     runtimeReady = true;
+    document.getElementById('loading').hidden = true;
     Module._WebLoginReady = () => 1;
     Module.syncLoginInputs({ x: 200, y: 150, width: 400,
       name: 'temporary', password: 'temporary password', focus: 1,
@@ -111,6 +112,36 @@ test('guest request cannot erase an authenticated account or race sign-in', asyn
   } finally { await browser.close(); }
 });
 
+test('mobile guest button receives trusted tap, queues once and clears focused credentials', async () => {
+  const browser = await chromium.launch({ args: ['--no-sandbox'] });
+  try {
+    const { page, requests } = await bridgePage(browser);
+    await page.evaluate(() => {
+      window.guestClicks = 0;
+      Module._WebPlayGuest = () => { guestClicks++; return 1; };
+    });
+    const guest = page.locator('#login-guest');
+    assert.equal(await guest.isVisible(), true);
+    assert.equal(await guest.getAttribute('type'), 'button');
+    assert.equal(await guest.getAttribute('aria-label'), 'Play as guest');
+    await page.locator('#login-password').focus();
+    await guest.evaluate(button => button.addEventListener('click', event => {
+      window.trustedGuestClick = event.isTrusted;
+    }));
+    const bounds = await guest.boundingBox();
+    await page.touchscreen.tap(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+    assert.equal(await page.evaluate(() => trustedGuestClick), true);
+    assert.equal(await page.evaluate(() => guestClicks), 1);
+    assert.equal(await guest.isVisible(), false);
+    for (const id of ['login-name', 'login-password']) {
+      assert.equal(await page.locator('#' + id).isVisible(), false);
+      assert.equal(await page.locator('#' + id).inputValue(), '');
+    }
+    assert.notEqual(await page.evaluate(() => document.activeElement.id), 'login-password');
+    assert.deepEqual(requests, []);
+  } finally { await browser.close(); }
+});
+
 test('signing in from guest discards guest files before loading private account saves', async () => {
   const browser = await chromium.launch({ args: ['--no-sandbox'] });
   try {
@@ -149,11 +180,12 @@ test('signing in from guest discards guest files before loading private account 
   } finally { await browser.close(); }
 });
 
-test('real native guest button starts a fresh profile and reload discards it',
+for (const mobile of [false, true]) test(`real ${mobile ? 'mobile touch' : 'desktop native'} guest button starts a fresh profile and reload discards it`,
   { skip: !process.env.WARBLADE_GAME_URL, timeout: 300000 }, async () => {
     const browser = await chromium.launch({ args: ['--no-sandbox'] });
     try {
-      const context = await browser.newContext({ viewport: { width: 800, height: 600 } });
+      const context = await browser.newContext({ viewport: mobile ? { width: 375, height: 812 } :
+        { width: 800, height: 600 }, isMobile: mobile, hasTouch: mobile });
       const page = await context.newPage();
       const errors = [], requests = [];
       page.on('pageerror', error => errors.push(error.message));
@@ -166,12 +198,19 @@ test('real native guest button starts a fresh profile and reload discards it',
         await page.waitForTimeout(1500);
       };
       await waitForLogin();
-      const canvas = await page.locator('#canvas').boundingBox();
-      await page.mouse.move(canvas.x + canvas.width * 160 / 800,
-        canvas.y + canvas.height * 392 / 600);
-      await page.mouse.down();
-      await page.waitForTimeout(150);
-      await page.mouse.up();
+      if (mobile) {
+        const guest = page.locator('#login-guest');
+        await guest.waitFor({ state: 'visible' });
+        const bounds = await guest.boundingBox();
+        await page.touchscreen.tap(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+      } else {
+        const canvas = await page.locator('#canvas').boundingBox();
+        await page.mouse.move(canvas.x + canvas.width * 160 / 800,
+          canvas.y + canvas.height * 392 / 600);
+        await page.mouse.down();
+        await page.waitForTimeout(150);
+        await page.mouse.up();
+      }
       await page.waitForFunction(() => Module._WebIsGuest() === 1, null, { timeout: 15000 });
       assert.equal(await page.evaluate(() => Module._WebCanPlay()), 1);
       assert.equal(await page.evaluate(() => Module._WebAccountStatus()), 0);

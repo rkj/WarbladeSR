@@ -570,6 +570,7 @@ var Module = {
 // A canvas is not editable: mobile keyboards require a real input focused by
 // the tap itself. Keep these fields over the native art, with no extra login UI.
 const loginInputs = [$('login-name'), $('login-password')];
+const guestButton = $('login-guest');
 let loginInputState = null;
 function syncLoginInputs(state) {
   const mobile = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
@@ -580,6 +581,8 @@ function syncLoginInputs(state) {
       input.hidden = true;
       input.value = '';
     }
+    if (document.activeElement === guestButton) guestButton.blur();
+    guestButton.hidden = true;
     return;
   }
   const rect = $('canvas').getBoundingClientRect();
@@ -593,7 +596,19 @@ function syncLoginInputs(state) {
     input.style.height = (20 * scaleY) + 'px';
     input.hidden = false;
   });
+  // Native buttons poll held mouse state; a short mobile tap can pass between
+  // frames. Route the guest tap directly to the queued native action instead.
+  guestButton.style.left = (rect.left + (state.x - 120) * scaleX) + 'px';
+  guestButton.style.top = (rect.top + (state.y + 192) * scaleY) + 'px';
+  guestButton.style.width = (136 * scaleX) + 'px';
+  guestButton.style.height = (20 * scaleY) + 'px';
+  guestButton.hidden = false;
 }
+guestButton.addEventListener('click', () => {
+  if (runtimeReady && Module._WebPlayGuest()) syncLoginInputs(null);
+});
+for (const event of ['keydown', 'keyup', 'keypress'])
+  guestButton.addEventListener(event, e => e.stopPropagation());
 loginInputs.forEach((input, field) => {
   const update = () => {
     if (runtimeReady && loginInputState)
