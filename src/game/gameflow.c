@@ -1581,7 +1581,7 @@ void GameFrame()
 void NewGame(bool resetLevel)
 {
 #ifdef __EMSCRIPTEN__
-    if (WebAccountStatus() != 1) {
+    if (!WebCanPlay()) {
         g_state = STATE_TITLE;
         WebOpenLogin(0);
         return;

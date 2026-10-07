@@ -167,6 +167,9 @@ int WebQueueCredentials(const char *username, const char *password, int create);
 void WebQueueSignOut(void);
 int WebLoginMode(void);
 int WebAccountStatus(void);
+int WebCanPlay(void);
+int WebIsGuest(void);
+int WebPlayGuest(void);
 #endif
 void ClearAccount();
 void ResetAccount();

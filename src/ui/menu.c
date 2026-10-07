@@ -887,6 +887,9 @@ void MenuUpdate(bool moved)
         WebQueueCredentials(g_windows[g_clickWin].edits[0].buf,
                             g_windows[g_clickWin].edits[1].buf, WebLoginMode());
         g_clickWin = g_clickItem = -1;
+    } else if (g_clickItem == 9002) {
+        WebPlayGuest();
+        g_clickWin = g_clickItem = -1;
     } else if (g_clickItem == 9001) {
         WebOpenLogin(!WebLoginMode());
         g_clickWin = g_clickItem = -1;
@@ -938,7 +941,8 @@ void MenuUpdate(bool moved)
     // ---- profile menu: logout, profile select ----
     if (g_clickItem == MENUID_LOGOUT) {
 #ifdef __EMSCRIPTEN__
-        WebQueueSignOut();
+        if (WebIsGuest()) WebOpenLogin(0);
+        else WebQueueSignOut();
 #else
         Logout();
 #endif
@@ -2360,7 +2364,7 @@ void MenuHandler()
                     WinCloseAll();
                     PlayClick();
 #ifdef __EMSCRIPTEN__
-                    if (WebAccountStatus() != 1)
+                    if (!WebCanPlay())
                         WebOpenLogin(0);
                     else {
                         g_profileReadOnly = 0;
@@ -2467,7 +2471,7 @@ void MenuHandler()
         if (g_clicked == MENUID_USER_PROFILES) {
 #ifdef __EMSCRIPTEN__
             WinCloseAll();
-            if (WebAccountStatus() != 1)
+            if (!WebCanPlay())
                 WebOpenLogin(0);
             else {
                 g_profileReadOnly = 0;

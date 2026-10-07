@@ -404,6 +404,23 @@ async function authenticateGame(username, password, create) {
   } finally { authBusy = false; }
 }
 
+// Anonymous play uses only the current visit's RAM filesystem. It never owns a
+// bearer session, loads private saves or publishes scores to the shared board.
+function beginGuestGame() {
+  if (authBusy || accountReady || sessionToken) return false;
+  removeTree(SAVE);
+  mkdirs(SAVE);
+  saved.clear();
+  scoreBase = null;
+  scoreVersion = null;
+  saveConflict = false;
+  saveNotice('');
+  Module.accountName = 'GUEST';
+  Module.authError = '';
+  syncLoginInputs(null);
+  return true;
+}
+
 async function signOutGame() {
   await persistSaves();
   if (saveConflict || !$('save-alert').hidden) {
@@ -527,7 +544,7 @@ function start() {
 
 var Module = {
   canvas: $('canvas'),
-  authenticateGame, signOutGame, syncLoginInputs,
+  authenticateGame, signOutGame, beginGuestGame, syncLoginInputs,
   accountName: '', authError: '',
   onGameScoreWritten: () => queueMicrotask(() => persistSaves()),
   print: (t) => console.log(t),

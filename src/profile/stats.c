@@ -1482,7 +1482,7 @@ void ProfileWindow(bool noButtons)
     } else {
         if (!g_newGameOnClose && g_state == STATE_TITLE && !g_profileReadOnly) {
 #ifdef __EMSCRIPTEN__
-            WinAddMenuItem(25, h - 55, g_curWin, 0x106, "SIGN OUT", 5);
+            WinAddMenuItem(25, h - 55, g_curWin, 0x106, WebIsGuest() ? "SIGN IN" : "SIGN OUT", 5);
             WinAddMenuItem(150, h - 55, g_curWin, 0x108, "PLAYLIST", 5);
 #else
             WinAddMenuItem(25, h - 55, g_curWin, 0x106, "CLOSE PROFILE", 5);
