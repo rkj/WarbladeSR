@@ -169,6 +169,15 @@ test('real mobile game accepts DOM credentials and stays signed in when starting
       const name = page.locator('#login-name');
       const password = page.locator('#login-password');
       await name.waitFor({ state: 'visible', timeout: 10000 });
+      // Native windows slide into view. A visible DOM field can still sit
+      // outside the canvas during that animation and cannot yet be tapped.
+      await page.waitForFunction(() => {
+        const input = document.getElementById('login-name').getBoundingClientRect();
+        const canvas = document.getElementById('canvas').getBoundingClientRect();
+        return input.width > 0 && input.left >= canvas.left &&
+          input.right <= canvas.right && input.top >= canvas.top &&
+          input.bottom <= canvas.bottom;
+      }, undefined, { timeout: 10000 });
       await page.evaluate(() => {
         window.fixtureCredentials = [];
         Module.authenticateGame = async (name, password, create) => {
