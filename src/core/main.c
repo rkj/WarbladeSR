@@ -20,6 +20,8 @@ static int webAuthBusy;
 // The legacy login flag also tracks the welcome sound; keep web UI state separate.
 static int webLoginVisible;
 static int webSignOutQueued;
+static int webGuestQueued;
+static int webGuestMode;
 static char webLoginUsername[33];
 static char webLoginPassword[257];
 static char webAuthError[193];
@@ -151,6 +153,17 @@ EMSCRIPTEN_KEEPALIVE int WebSubmitLogin(void)
                                         window->edits[1].buf, webLoginCreate) : 0;
 }
 
+EMSCRIPTEN_KEEPALIVE int WebPlayGuest(void)
+{
+    if (webAuthBusy || webAuthQueued || webAccountStatus == 1) return 0;
+    webGuestQueued = 1;
+    return 1;
+}
+
+EM_JS(int, WebBeginGuest, (), {
+    return Module.beginGuestGame() ? 1 : 0;
+});
+
 EMSCRIPTEN_KEEPALIVE void WebQueueSignOut(void)
 {
     if (webAccountStatus == 1)
@@ -162,7 +175,7 @@ static void WebShowLogin(int create)
     webLoginCreate = !!create;
     WinCloseAll();
     WinHideAll();
-    g_curWin = WinOpen(POS_CENTERED, POS_CENTERED, 640, 250, WIN_MODE_SLIDING);
+    g_curWin = WinOpen(POS_CENTERED, POS_CENTERED, 640, 310, WIN_MODE_SLIDING);
     WinAddText(POS_CENTERED, 20, g_curWin, create ? "CREATE PLAYER" : "PLAYER SIGN IN", 8);
     WinAddText(30, 50, g_curWin, "PLAYER NAME :", 8);
     WinAddEdit(150, 50, g_curWin, 32, 0, 7, 1);
@@ -184,6 +197,8 @@ static void WebShowLogin(int create)
     }
     WinAddMenuItem(30, 210, g_curWin, 9000, create ? "CREATE PLAYER" : "SIGN IN", 5);
     WinAddMenuItem(340, 210, g_curWin, 9001, create ? "SIGN IN INSTEAD" : "CREATE PLAYER", 5);
+    WinAddMenuItem(30, 242, g_curWin, 9002, "PLAY AS GUEST", 5);
+    WinAddText(30, 274, g_curWin, "GUEST PROGRESS LASTS UNTIL YOU RELOAD", 7);
     WinSetSelected(g_curWin, 9000);
     g_loginWinOpen = 1;
     webLoginVisible = 1;
@@ -195,6 +210,41 @@ static void WebShowLogin(int create)
 void WebProcessAccountQueue(void)
 {
     WebUpdateLoginInputs();
+    if (webGuestQueued) {
+        webGuestQueued = 0;
+        // Returning from sign-in keeps this visit's existing guest progress.
+        if (!webGuestMode) {
+            if (!WebBeginGuest()) return;
+            webGuestMode = 1;
+            webAccountStatus = 0;
+            snprintf(webAccountName, sizeof(webAccountName), "GUEST");
+            memset(webLoginUsername, 0, sizeof(webLoginUsername));
+            memset(webLoginPassword, 0, sizeof(webLoginPassword));
+            webAuthError[0] = 0;
+            g_profileIndex = -1;
+            g_profileCount = 0;
+            NextAccountReset();
+            ResetAccount();
+            WebNormalizeAccount();
+            PackAccount(0);
+            SaveAccount(0);
+            g_selProfile = g_cfg.profileSel = 0;
+            LoadHiscores();
+            LoadBestScore();
+            UnpackAccount(0);
+            ActivateProfile(0);
+            ClearAccount();
+        }
+        webLoginPending = -1;
+        webLoginVisible = 0;
+        WinCloseAll();
+        WebUpdateLoginInputs();
+        g_clickWin = g_clickItem = -1;
+        g_gameMode = MODE_SINGLE;
+        g_hofMode = g_cfg.difficulty;
+        NewGame(true);
+        return;
+    }
     if (webSignOutQueued) {
         webSignOutQueued = 0;
         WebSaveSettings();
@@ -247,6 +297,7 @@ void WebProcessAccountQueue(void)
             UnpackAccount(0);
             ActivateProfile(0);
             ClearAccount();
+            webGuestMode = 0;
             webAccountStatus = 1;
             g_loginWinOpen = 0;
             webLoginVisible = 0;
@@ -291,6 +342,17 @@ EMSCRIPTEN_KEEPALIVE int WebAccountStatus(void)
             return -1;
     return 1;
 }
+EMSCRIPTEN_KEEPALIVE int WebIsGuest(void)
+{
+    return webGuestMode;
+}
+
+EMSCRIPTEN_KEEPALIVE int WebCanPlay(void)
+{
+    return WebAccountStatus() == 1 ||
+           (webGuestMode && g_profileIndex == 0 && g_profileCount == 1 && g_loggedIn);
+}
+
 #endif
 
 
