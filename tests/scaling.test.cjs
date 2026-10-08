@@ -13,6 +13,66 @@ for (const density of [1, 3]) test(`mobile scaling at DPR ${density} preserves d
       const context = await browser.newContext({ viewport: { width: 375, height: 812 },
         deviceScaleFactor: density, isMobile: true, hasTouch: true });
       const page = await context.newPage();
+      // Observe the real SDL presentation sampler without changing GL state or
+      // drawing a substitute scene. Only the final 800x600 canvas copy is relevant.
+      await page.addInitScript(() => {
+        const getContext = HTMLCanvasElement.prototype.getContext;
+        HTMLCanvasElement.prototype.getContext = function (...args) {
+          const gl = getContext.apply(this, args);
+          if (this.id !== 'canvas' || !/^webgl/.test(args[0]) || !gl || gl.scalingObserved)
+            return gl;
+          gl.scalingObserved = true;
+          const textures = new Map(), units = new Map(), shaders = new Map(), programs = new Map();
+          let active = gl.TEXTURE0, framebuffer = null, program = null;
+          const wrap = (name, observe) => {
+            const call = gl[name];
+            gl[name] = function (...values) {
+              observe(values);
+              return call.apply(this, values);
+            };
+          };
+          wrap('activeTexture', values => { active = values[0]; });
+          wrap('bindTexture', values => {
+            if (values[0] === gl.TEXTURE_2D) {
+              units.set(active, values[1]);
+              if (values[1] && !textures.has(values[1])) textures.set(values[1], {});
+            }
+          });
+          wrap('bindFramebuffer', values => {
+            if (values[0] === gl.FRAMEBUFFER || values[0] === gl.DRAW_FRAMEBUFFER)
+              framebuffer = values[1];
+          });
+          wrap('texImage2D', values => {
+            const texture = textures.get(units.get(active));
+            if (texture && values.length === 9) {
+              texture.width = values[3]; texture.height = values[4];
+            }
+          });
+          wrap('texParameteri', values => {
+            const texture = textures.get(units.get(active));
+            if (texture && values[1] === gl.TEXTURE_MIN_FILTER) texture.min = values[2];
+            if (texture && values[1] === gl.TEXTURE_MAG_FILTER) texture.mag = values[2];
+          });
+          wrap('shaderSource', values => { shaders.set(values[0], values[1]); });
+          wrap('attachShader', values => {
+            if (!programs.has(values[0])) programs.set(values[0], new Set());
+            programs.get(values[0]).add(values[1]);
+          });
+          wrap('useProgram', values => { program = values[0]; });
+          const observeDraw = () => {
+            if (framebuffer !== null) return;
+            for (const texture of units.values()) {
+              const state = textures.get(texture);
+              if (state?.width === 800 && state.height === 600)
+                window.presentationSampler = { min: state.min, mag: state.mag, linear: gl.LINEAR,
+                  pixelart: [...(programs.get(program) || [])].some(shader =>
+                    (shaders.get(shader) || '').includes('GetPixelArtSample')) };
+            }
+          };
+          for (const name of ['drawArrays', 'drawElements']) wrap(name, observeDraw);
+          return gl;
+        };
+      });
       const errors = [], accountRequests = [];
       page.on('pageerror', error => errors.push(error.message));
       await page.route('**/api/**', route => {
@@ -54,6 +114,15 @@ for (const density of [1, 3]) test(`mobile scaling at DPR ${density} preserves d
         return password;
       };
       let password = await checkDisplay();
+      if (density === 1) {
+        await page.waitForFunction(() => window.presentationSampler &&
+          presentationSampler.min === presentationSampler.linear &&
+          presentationSampler.mag === presentationSampler.linear &&
+          !presentationSampler.pixelart, null, { timeout: 10000 });
+      }
+      if (process.env.WARBLADE_SCALING_EVIDENCE)
+        await page.screenshot({ path: path.join(process.env.WARBLADE_SCALING_EVIDENCE,
+          `mobile-login-portrait-dpr${density}.png`) });
       await page.touchscreen.tap(password.x + password.width / 2, password.y + password.height / 2);
       assert.equal(await page.evaluate(() => document.activeElement.id), 'login-password');
       await page.keyboard.type('MiXeD#123');

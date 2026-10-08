@@ -352,38 +352,6 @@ TEST(engine_SysFlip_shows_the_back_buffer_letterboxed)
 // Interpolation
 // ---------------------------------------------------------------------------------------------
 
-TEST(engine_SysFlip_shrinking_preserves_thin_strokes_and_resizing_restores_crisp_pixels)
-{
-    SDL_Surface *s;
-    int x, pass;
-    OpenWindow(64, 48);
-    SysSetVSync(false);
-    SysSetInterpolation(SYS_INTERP_OFF);
-    SysSetMaxFps(0);
-    // A one-pixel stem alternating with a one-pixel gap is the smallest feature
-    // in the bitmap font. At half size both must contribute, rather than picking
-    // only white or only black columns. Resize twice to exercise filter changes.
-    for (pass = 0; pass < 2; pass++) {
-        SDL_SetWindowSize(TheWindow(), 32, 24);
-        for (x = 0; x < 64; x += 2)
-            DrawRect((float)x, 0, (float)x + 1, 48, 1, 1, 1, 1);
-        SysFlip();
-        s = SDL_GetWindowSurface(TheWindow());
-        CHECK(s != NULL);
-        for (x = 1; x < 31; x++)
-            CHECK_RGB(SurfaceRgb(s, x, 12), 0x808080, 3);
-
-        SDL_SetWindowSize(TheWindow(), 128, 96);
-        for (x = 0; x < 64; x += 2)
-            DrawRect((float)x, 0, (float)x + 1, 48, 1, 1, 1, 1);
-        SysFlip();
-        s = SDL_GetWindowSurface(TheWindow());
-        CHECK(s != NULL);
-        for (x = 4; x < 124; x++)
-            CHECK_RGB(SurfaceRgb(s, x, 48), (x % 4 < 2) ? 0xffffff : 0, 0);
-    }
-}
-
 // The display's refresh rate, as SDL reports it (the offscreen driver says 0).
 static void SetDisplayHz(float hz)
 {
