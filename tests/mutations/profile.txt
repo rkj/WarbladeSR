@@ -243,7 +243,7 @@ expect: Profile_SetupDifficulty_rising_replays_two_milestones_at_level_250
 
 == profile: WriteSettings title text
 file: src/profile/settings.c
-- char tit[CFG_TITLE_LEN] = "Warblade SR 2.0 Information";
+- char tit[CFG_TITLE_LEN] = "Warblade v2.0 Information";
 + char tit[CFG_TITLE_LEN] = "WarBlade v1.35 Information";
 expect: Profile_WriteSettings_writes_whole_config_with_title
 
