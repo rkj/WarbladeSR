@@ -380,6 +380,7 @@ class Flood(unittest.TestCase):
     game), and a client holding too many downloads at once gets 429 for the extra ones."""
 
     def test_request_rate(self):
+        time.sleep(3)  # refill budget after readiness probes / preceding tests
         parts = urlsplit(LIMITS_URL)
         statuses = []
         lock = threading.Lock()
