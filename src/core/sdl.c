@@ -33,6 +33,7 @@ void AudioTick(void);
 static SDL_Window   *s_window;
 static SDL_Renderer *s_renderer;
 static SDL_Texture  *s_canvas;       // the back buffer; always the render target between flips
+static SDL_ScaleMode s_canvasScaleMode = SDL_SCALEMODE_PIXELART;
 static int           s_width, s_height;
 static bool          s_fullscreen;
 static bool          s_quit;
@@ -120,6 +121,12 @@ bool SysCreateWindow(int w, int h, bool windowed, const char *title, const char 
     windowed = true;
 #endif
     flags = windowed ? SDL_WINDOW_RESIZABLE : SDL_WINDOW_RESIZABLE | SDL_WINDOW_FULLSCREEN;
+#ifdef __EMSCRIPTEN__
+    // Keep CSS/input coordinates in logical pixels while presenting at the
+    // display density. Otherwise thin bitmap strokes are lost in a low-resolution
+    // canvas before a phone's browser enlarges it again.
+    flags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
+#endif
 
     SysDestroyWindow();
     SDL_SetHint(SDL_HINT_RENDER_DRIVER, renderDriver);     // NULL clears it
@@ -144,7 +151,8 @@ bool SysCreateWindow(int w, int h, bool windowed, const char *title, const char 
     SDL_SetTextureBlendMode(s_canvas, SDL_BLENDMODE_NONE);
     SDL_SetTextureBlendMode(s_base, SDL_BLENDMODE_NONE);
     // Pixel-art scaling keeps the 800x600 picture (and its bitmap fonts) sharp in large windows.
-    SDL_SetTextureScaleMode(s_canvas, SDL_SCALEMODE_PIXELART);
+    s_canvasScaleMode = SDL_SCALEMODE_PIXELART;
+    SDL_SetTextureScaleMode(s_canvas, s_canvasScaleMode);
     SDL_SetTextureScaleMode(s_base, SDL_SCALEMODE_PIXELART);
     s_recording = false;
     s_width = w;
@@ -299,6 +307,14 @@ static void FlipPlain(void)
     SDL_SetRenderDrawColor(s_renderer, 0, 0, 0, 255);
     SDL_RenderClear(s_renderer);
     dst = OutputRect();
+    // Average neighbouring pixels when shrinking, preserving coverage of thin
+    // text strokes. Pixel-art magnification still keeps the original look.
+    SDL_ScaleMode scaleMode = dst.w < s_width || dst.h < s_height ?
+                             SDL_SCALEMODE_LINEAR : SDL_SCALEMODE_PIXELART;
+    if (scaleMode != s_canvasScaleMode) {
+        SDL_SetTextureScaleMode(s_canvas, scaleMode);
+        s_canvasScaleMode = scaleMode;
+    }
     SDL_RenderTexture(s_renderer, s_canvas, NULL, &dst);
     SDL_RenderPresent(s_renderer);
     SDL_SetRenderTarget(s_renderer, s_canvas);
@@ -1218,7 +1234,7 @@ static void StartRecording(bool fresh)
     SDL_SetRenderTarget(s_renderer, s_base);
     SDL_SetTextureScaleMode(s_canvas, SDL_SCALEMODE_NEAREST);
     SDL_RenderTexture(s_renderer, s_canvas, NULL, NULL);
-    SDL_SetTextureScaleMode(s_canvas, SDL_SCALEMODE_PIXELART);
+    SDL_SetTextureScaleMode(s_canvas, s_canvasScaleMode);
     SDL_SetRenderTarget(s_renderer, s_canvas);
     if (fresh)
         s_lists[s_curList].count = 0;
