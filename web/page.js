@@ -526,8 +526,23 @@ let performanceBuckets = new Map();
 let performanceSending = false;
 function placePerformanceCounter() {
   const rect = $('canvas').getBoundingClientRect();
-  $('performance').style.left = (rect.left + 6) + 'px';
-  $('performance').style.top = (rect.top + 6) + 'px';
+  const counter = $('performance');
+  // Leave room for the native bottom menu; landscape touch buttons can also
+  // extend into the game picture. Move left only where a button occupies it.
+  let right = rect.right - 6;
+  const bottom = rect.bottom - Math.max(6, rect.height * 24 / 600);
+  const width = counter.offsetWidth, height = counter.offsetHeight;
+  if (!$('touch').hidden) {
+    const controls = [...$('touch').children].map(control => control.getBoundingClientRect())
+      .sort((a, b) => b.right - a.right);
+    for (const control of controls) {
+      if (right > control.left && right - width < control.right &&
+          bottom > control.top && bottom - height < control.bottom)
+        right = control.left - 6;
+    }
+  }
+  counter.style.left = right + 'px';
+  counter.style.top = bottom + 'px';
 }
 function performanceSummary(phase, bucket) {
   let count = 0, p95 = bucket.max;
