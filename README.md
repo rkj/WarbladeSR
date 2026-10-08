@@ -145,6 +145,8 @@ cd build/linux-release && ./warblade
 
 ### Browser
 
+The browser game presents at the display's pixel density while keeping the original 800×600 game and input coordinates. Shrinking uses smooth texture filtering to preserve thin text strokes; enlarged output keeps the pixel-art look. The game framebuffer stays at its original resolution and this adds no post-processing passes.
+
 The same code also builds to WebAssembly with [Emscripten](https://emscripten.org). Game assets may be supplied by the server or selected locally; all assets stay in memory for the current page visit. Each player account owns exactly one game profile; profiles, settings and saves are stored on the server. The six high-score tables are shared and merged transactionally on the server, including when players finish at the same time.
 
 ```sh

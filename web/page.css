@@ -6,9 +6,10 @@
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
              font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
 #stage { position: fixed; inset: 0; bottom: auto; height: var(--game-height, 100vh); display: flex; align-items: center; justify-content: center; }
-/* 800x600 picture, scaled to fit the page; SDL sets the canvas' own size. */
+/* SDL presents the 800x600 game at display density. Keep browser resampling
+   smooth so a fractional CSS size does not discard the filtered text strokes. */
 #canvas { display: block; width: min(100vw, calc(var(--game-height, 100vh) * 4 / 3)) !important;
-          height: min(var(--game-height, 100vh), calc(100vw * 3 / 4)) !important; image-rendering: pixelated;
+          height: min(var(--game-height, 100vh), calc(100vw * 3 / 4)) !important; image-rendering: auto;
           background: #000; outline: none; }
 #loading { position: absolute; width: min(100vw, calc(var(--game-height, 100vh) * 4 / 3));
            height: min(var(--game-height, 100vh), calc(100vw * 3 / 4)); background: #000;
