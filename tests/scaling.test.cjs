@@ -92,23 +92,34 @@ for (const density of [1, 3]) test(`mobile scaling at DPR ${density} preserves d
       await page.waitForTimeout(1500); // allow the native window's entrance to finish
 
       const checkDisplay = async () => {
-        await page.waitForFunction(density => {
+        const aligned = await page.waitForFunction(density => {
           const canvas = document.getElementById('canvas');
           const rect = canvas.getBoundingClientRect();
-          return Math.abs(canvas.width - rect.width * density) <= 2 &&
-            Math.abs(canvas.height - rect.height * density) <= 2;
+          const state = window.lastNativeLogin;
+          const password = document.getElementById('login-password').getBoundingClientRect();
+          const guest = document.getElementById('login-guest').getBoundingClientRect();
+          // SDL density and browser input overlays settle in separate frame
+          // callbacks after rotation. Read them together and await actual
+          // alignment, rather than comparing boxes captured in different frames.
+          if (!state || state.screenW !== 800 || state.screenH !== 600 ||
+            Math.abs(canvas.width - rect.width * density) > 2 ||
+            Math.abs(canvas.height - rect.height * density) > 2 ||
+            Math.abs(password.x - (rect.x + state.x * rect.width / 800)) >= 2 ||
+            Math.abs(password.y - (rect.y + (state.y + 25) * rect.height / 600)) >= 2 ||
+            Math.abs(guest.x - (rect.x + (state.x - 120) * rect.width / 800)) >= 2 ||
+            Math.abs(guest.y - (rect.y + (state.y + 192) * rect.height / 600)) >= 2)
+            return false;
+          return { canvas: rect.toJSON(), password: password.toJSON(), guest: guest.toJSON(), state,
+            rendering: getComputedStyle(canvas).imageRendering };
         }, density, { timeout: 10000 });
-        const canvas = await page.locator('#canvas').boundingBox();
+        const { canvas, password, guest, state, rendering } = await aligned.jsonValue();
+        await aligned.dispose();
         assert.ok(Math.abs(canvas.width / canvas.height - 4 / 3) < 0.01);
-        assert.equal(await page.locator('#canvas').evaluate(canvas =>
-          getComputedStyle(canvas).imageRendering), 'auto');
-        const state = await page.evaluate(() => lastNativeLogin);
+        assert.equal(rendering, 'auto');
         assert.equal(state.screenW, 800, 'game and input keep original logical resolution');
         assert.equal(state.screenH, 600);
-        const password = await page.locator('#login-password').boundingBox();
         assert.ok(Math.abs(password.x - (canvas.x + state.x * canvas.width / 800)) < 2);
         assert.ok(Math.abs(password.y - (canvas.y + (state.y + 25) * canvas.height / 600)) < 2);
-        const guest = await page.locator('#login-guest').boundingBox();
         assert.ok(Math.abs(guest.x - (canvas.x + (state.x - 120) * canvas.width / 800)) < 2);
         assert.ok(Math.abs(guest.y - (canvas.y + (state.y + 192) * canvas.height / 600)) < 2);
         return password;
