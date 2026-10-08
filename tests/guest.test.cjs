@@ -64,12 +64,12 @@ test('guest bridge clears temporary saves and credentials without server or brow
     const { context, page, requests } = await bridgePage(browser);
     assert.equal(await page.evaluate(() => Module.beginGuestGame()), true);
     assert.deepEqual(await page.evaluate(() => ({ files: FS.readdir('/save'), saved: saved.size,
-      scoreBase, scoreVersion, accountReady, sessionToken, name: Module.accountName,
+      scoreBase, scoreVersion, accountReady, name: Module.accountName,
       error: Module.authError, conflict: saveConflict,
       nameInput: document.getElementById('login-name').value,
       passwordInput: document.getElementById('login-password').value })), {
       files: ['.', '..'], saved: 0, scoreBase: null, scoreVersion: null,
-      accountReady: false, sessionToken: '', name: 'GUEST', error: '', conflict: false,
+      accountReady: false, name: 'GUEST', error: '', conflict: false,
       nameInput: '', passwordInput: '',
     });
     assert.equal(await page.locator('#login-password').isVisible(), false);
@@ -89,7 +89,7 @@ test('guest bridge clears temporary saves and credentials without server or brow
     assert.deepEqual(await context.cookies(), []);
     await page.reload();
     assert.equal(await page.evaluate(() => accountReady), false);
-    assert.equal(await page.evaluate(() => sessionToken), '');
+    assert.equal(await page.evaluate(() => Module.accountName), '');
   } finally { await browser.close(); }
 });
 
@@ -97,10 +97,9 @@ test('guest request cannot erase an authenticated account or race sign-in', asyn
   const browser = await chromium.launch({ args: ['--no-sandbox'] });
   try {
     const { page, requests } = await bridgePage(browser);
-    for (const state of ['accountReady', 'sessionToken', 'authBusy']) {
+    for (const state of ['accountReady', 'authBusy']) {
       await page.evaluate(state => {
         accountReady = state === 'accountReady';
-        sessionToken = state === 'sessionToken' ? 'T'.repeat(43) : '';
         authBusy = state === 'authBusy';
       }, state);
       assert.equal(await page.evaluate(() => Module.beginGuestGame()), false, state);
@@ -158,7 +157,7 @@ test('signing in from guest discards guest files before loading private account 
       const pathname = new URL(request.url()).pathname;
       calls.push([request.method(), pathname]);
       if (pathname === '/api/login') return route.fulfill({ json: {
-        username: 'TestPlayer', token: 'T'.repeat(43),
+        username: 'TestPlayer',
       } });
       if (pathname === '/api/saves') return route.fulfill({ json: { files: [
         { path: 'warblade/profiles/profile000.acc', version: 3 },
@@ -189,7 +188,11 @@ for (const mobile of [false, true]) test(`real ${mobile ? 'mobile touch' : 'desk
       const page = await context.newPage();
       const errors = [], requests = [];
       page.on('pageerror', error => errors.push(error.message));
-      await page.route('**/api/**', route => { requests.push(route.request().url()); return route.abort(); });
+      await page.route('**/api/**', route => {
+        if (new URL(route.request().url()).pathname === '/api/me')
+          return route.fulfill({ json: { username: null } });
+        requests.push(route.request().url()); return route.abort();
+      });
       await page.goto(process.env.WARBLADE_GAME_URL);
       const waitForLogin = async () => {
         await page.waitForFunction(() => gameStarted && Module._WebLoginReady() === 1,

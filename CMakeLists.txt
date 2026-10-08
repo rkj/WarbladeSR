@@ -6,7 +6,7 @@
 # from CMAKE_PREFIX_PATH, and the game runs from a folder holding the install's data/.
 cmake_minimum_required(VERSION 3.25)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")   # /MT, /MTd
-project(warblade C)
+project(warblade VERSION 2.0 LANGUAGES C)
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 

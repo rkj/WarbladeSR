@@ -97,7 +97,7 @@ TEST(core_LogCrashReport_writes_state_and_players)
     const char *log = ReadUserFile("warblade\\warblade.dbg");
     char want[64];
     snprintf(want, sizeof want, "Program State: %d\r\n", STATE_SHOP);
-    const char *start = LOG_HEADER "\r\n\r\n\r\n## CRASH ## v1.34 SR1\r\nVersion : FULL VERSION\r\n";
+    const char *start = LOG_HEADER "\r\n\r\n\r\n## CRASH ## v2.0\r\nVersion : FULL VERSION\r\n";
     CHECK(strncmp(log, start, strlen(start)) == 0);
     CHECK(strstr(log, want) != NULL);
     CHECK(strstr(log, "Game mode : TWO PLAYER GAME\r\n") != NULL);

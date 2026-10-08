@@ -1055,7 +1055,7 @@ int PackLevelData(int slot, int level, short mode)
 void LoadingScreen(int n)
 {
     DrawRect(0, 0, (float)g_screenW, (float)g_screenH, 0, 0, 0, 1.0f);
-    DrawMenuText("WARBLADE VERSION 1.34 SR1", POS_CENTERED, 0x10e, 2);
+    DrawMenuText("WARBLADE SR VERSION 2.0", POS_CENTERED, 0x10e, 2);
     DrawMenuText("L O A D I N G   D A T A", POS_CENTERED, 0x136, 2);
     sprintf(g_logBuf, "FILLING LEVEL BUFFER : %d", n);
     DrawMenuText(g_logBuf, POS_CENTERED, 0x168, 2);

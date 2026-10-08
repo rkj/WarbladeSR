@@ -74,7 +74,7 @@ bool InitWindow(bool windowed)
 
     g_cfg.windowed = windowed;
     if (renderer != RENDERER_AUTO &&
-        !SysCreateWindow(g_screenW, g_screenH, windowed, "Warblade 1.34 SR1", s_rendererHints[renderer])) {
+        !SysCreateWindow(g_screenW, g_screenH, windowed, "Warblade SR 2.0", s_rendererHints[renderer])) {
         sprintf(g_logBuf, "ERROR :  Could not create the %s renderer, using auto\n",
                 s_rendererHints[renderer]);
         LogPrint(g_logBuf);
@@ -83,7 +83,7 @@ bool InitWindow(bool windowed)
         WriteSettings();
     }
     if (renderer == RENDERER_AUTO &&
-        !SysCreateWindow(g_screenW, g_screenH, windowed, "Warblade 1.34 SR1", 0)) {
+        !SysCreateWindow(g_screenW, g_screenH, windowed, "Warblade SR 2.0", 0)) {
         LogPrint("ERROR :  Could not open window\n");
         return false;
     }
@@ -140,7 +140,7 @@ int LoadGameData()
     SysFlip();
     SysSetClearColor(0, 0, 0, 1.0f);
     SysSetWorldView(g_worldViewX, g_worldViewY, g_worldViewRotation, g_worldZoom, true);
-    DrawMenuText("WARBLADE VERSION 1.34 SR1", POS_CENTERED, 0x10e, 2);
+    DrawMenuText("WARBLADE SR VERSION 2.0", POS_CENTERED, 0x10e, 2);
     DrawMenuText("L O A D I N G   D A T A", POS_CENTERED, 0x136, 2);
     FlushBlit(0);
     FlushQuads(0);

@@ -272,7 +272,7 @@ void SaveAccount(int profile)
             r = _write(fh, &g_accBuf[profile], SIZEOF_ACCOUNT);
             if (r == -1) {
                 g_fileWriteErrorFlag = 1;
-                SysMessageBox("WarBlade v1.34 SR1, Copyright 1999-2009 Edgar M Vigdal",
+                SysMessageBox("Warblade SR 2.0, Copyright 1999-2009 Edgar M Vigdal",
                               "Could not open/create Profile file");
                 g_fileWriteErrorFlag = 0;
             }

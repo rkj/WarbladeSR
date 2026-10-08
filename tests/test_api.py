@@ -115,9 +115,52 @@ def test_accounts_sessions_and_isolation(tmp_path):
     assert a.get(PATH).headers["content-type"] == "application/octet-stream"
     assert a.get(PATH).headers["x-content-type-options"] == "nosniff"
     assert a.post("/api/logout", headers={"Origin": ORIGIN}).status_code == 200
-    assert a.get("/api/me").status_code == 401
+    assert a.get("/api/me").json() == {"username": None}
     assert a.get(PATH).status_code == 401
     assert a.get(PATH).headers["cache-control"] == "private, no-store"
+
+
+def test_cookie_session_reload_expiry_and_logout_revocation(tmp_path):
+    c = client(tmp_path)
+    anonymous = c.get("/api/me")
+    assert anonymous.status_code == 200
+    assert anonymous.json() == {"username": None}
+    assert anonymous.headers["cache-control"] == "private, no-store"
+    registered = register(c, "Remembered")
+    assert registered.json() == {"username": "Remembered"}
+    cookie_header = registered.headers["set-cookie"]
+    assert "HttpOnly" in cookie_header
+    assert "SameSite=lax" in cookie_header
+    assert "Max-Age=2592000" in cookie_header
+    token = c.cookies.get(api_module.COOKIE)
+    c.put(PATH, content=b"remembered progress", headers={"Origin": ORIGIN, "If-Match": "*"})
+    reloaded = client(tmp_path)
+    reloaded.cookies.set(api_module.COOKIE, token)
+    assert reloaded.get("/api/me").json() == {"username": "Remembered"}
+    assert reloaded.get(PATH).content == b"remembered progress"
+    logout = c.post("/api/logout", headers={"Origin": ORIGIN})
+    assert logout.status_code == 200
+    assert "Max-Age=0" in logout.headers["set-cookie"]
+    assert reloaded.get("/api/me").json() == {"username": None}
+    assert reloaded.get(PATH).status_code == 401
+    login = c.post("/api/login", json={"username": "remembered", "password": "long password 123"},
+                   headers={"Origin": ORIGIN})
+    assert login.status_code == 200
+    with sqlite3.connect(tmp_path / "state.sqlite3") as db:
+        db.execute("UPDATE sessions SET expires_at=0")
+    assert c.get("/api/me").json() == {"username": None}
+    assert c.get(PATH).status_code == 401
+
+
+def test_https_remembered_cookie_is_secure(tmp_path):
+    origin = "https://warblade.test"
+    c = TestClient(api_module.create_app(tmp_path / "state.sqlite3", origin), base_url=origin,
+                   client=("127.0.0.1", 50000))
+    registered = c.post("/api/register", json={"username": "SecurePlayer", "password": "Eight123"},
+                        headers={"Origin": origin})
+    assert registered.status_code == 200
+    assert "Secure" in registered.headers["set-cookie"]
+    assert c.get("/api/me").json() == {"username": "SecurePlayer"}
 
 
 def test_origin_paths_and_limits(tmp_path, monkeypatch):
@@ -182,7 +225,7 @@ def test_auth_bounds_and_peer_identity(tmp_path):
     assert c.post("/api/register", json={"username": "Carl", "password": "long password 123"},
                   headers={"Origin": ORIGIN}).status_code == 429
     c.cookies.set(api_module.COOKIE, "bad-non-ascii-%CE%A9")
-    assert c.get("/api/me").status_code == 401
+    assert c.get("/api/me").json() == {"username": None}
 
 
 def test_trusted_proxy_header_is_strict(tmp_path):
@@ -195,6 +238,37 @@ def test_trusted_proxy_header_is_strict(tmp_path):
                   headers={"Origin": ORIGIN, "X-Real-IP": "203.0.113.6"}).status_code == 401
     assert c.post("/api/login", json={"username": "Alice", "password": "long password 123"},
                   headers={"Origin": ORIGIN, "X-Real-IP": "203.0.113.7, 203.0.113.8"}).status_code == 400
+
+
+def test_cookie_rollout_accepts_open_memory_session_but_cookie_identity_wins(tmp_path):
+    old = client(tmp_path, session_mode="memory")
+    token = register(old, "OldPlayer").json()["token"]
+    old.headers["Authorization"] = "Bearer " + token
+    assert old.put(PATH, content=b"old tab progress",
+                   headers={"Origin": ORIGIN, "If-Match": "*"}).status_code == 200
+    updated = client(tmp_path, session_mode="cookie")
+    updated.headers["Authorization"] = "Bearer " + token
+    assert updated.get("/api/me").json() == {"username": "OldPlayer"}
+    assert updated.get(PATH).content == b"old tab progress"
+    current = client(tmp_path, session_mode="cookie")
+    cookie_login = register(current, "CurrentPlayer")
+    assert cookie_login.json() == {"username": "CurrentPlayer"}
+    assert current.put(PATH, content=b"current player progress",
+                       headers={"Origin": ORIGIN, "If-Match": "*"}).status_code == 200
+    updated.cookies.set(api_module.COOKIE, current.cookies.get(api_module.COOKIE))
+    assert updated.get("/api/me").json() == {"username": "CurrentPlayer"}
+    assert updated.get(PATH).content == b"current player progress"
+    # A bad cookie cannot silently fall back to the old account either.
+    updated.cookies.clear()
+    updated.cookies.set(api_module.COOKIE, "invalid")
+    assert updated.get("/api/me").json() == {"username": None}
+    assert updated.get(PATH).status_code == 401
+    updated.cookies.clear()
+    assert updated.post("/api/logout", headers={"Origin": ORIGIN}).status_code == 200
+    assert old.get("/api/me").status_code == 401
+    assert old.get(PATH).status_code == 401
+    assert current.get("/api/me").json() == {"username": "CurrentPlayer"}
+    assert current.get(PATH).content == b"current player progress"
 
 
 def test_memory_sessions_are_explicit_isolated_and_revocable(tmp_path):

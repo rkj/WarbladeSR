@@ -418,7 +418,7 @@ TEST(Profile_WriteSettings_writes_whole_config_with_title)
     DefaultSettings();
     memset(g_cfg.title, 'x', sizeof g_cfg.title);
     WriteSettings();
-    CHECK_STR(g_cfg.title, "WarBlade v1.34 Information");
+    CHECK_STR(g_cfg.title, "Warblade SR 2.0 Information");
     CHECK_EQ_INT(HostFileSize(InfPath()), CFG_SIZE);
 
     Settings onDisk;

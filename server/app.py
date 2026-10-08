@@ -274,8 +274,10 @@ def create_app(db_path: str | Path, public_origin: str, *, secure_cookie: bool |
         return Response(status_code=204)
 
     def session_token(request: Request) -> str:
-        if session_mode == "cookie":
-            return request.cookies.get(COOKIE, "")
+        if session_mode == "cookie" and COOKIE in request.cookies:
+            return request.cookies[COOKIE]
+        # Cookie-mode rollout also accepts existing memory-only page sessions.
+        # New browser logins receive only cookies; a cookie takes precedence.
         # Never fall back to ambient browser cookies in memory-only mode.
         scheme, separator, token = request.headers.get("authorization", "").partition(" ")
         return token if separator and scheme.lower() == "bearer" else ""
@@ -373,7 +375,16 @@ def create_app(db_path: str | Path, public_origin: str, *, secure_cookie: bool |
         return {"ok": True}
 
     @api.get("/api/me")
-    def me(account_id: int = Depends(account)):
+    def me(request: Request, response: Response):
+        try:
+            account_id = account(request)
+        except HTTPException as error:
+            if session_mode != "cookie" or error.status_code != 401:
+                raise
+            if COOKIE in request.cookies:
+                response.delete_cookie(COOKIE, path="/", httponly=True,
+                                       secure=secure_cookie, samesite="lax")
+            return {"username": None}
         with connection() as db:
             row = db.execute("SELECT username FROM accounts WHERE id=?", (account_id,)).fetchone()
         return {"username": row["username"]}
