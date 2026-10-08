@@ -15,7 +15,7 @@ test('title loading view starts the game once without a click and keeps recovery
     const dataReady = new Promise(resolve => {releaseData = resolve;});
     await page.route('http://warblade.test/**', async route => {
       const url = new URL(route.request().url());
-      if (url.pathname === '/api/me') throw new Error('Startup must not probe a protected account endpoint');
+      if (url.pathname === '/api/me') return route.fulfill({ json: { username: null } });
       if (url.pathname === '/loading-title.jpg') return route.fulfill({status:404,body:''});
       if (url.pathname === '/data/') return route.fulfill({contentType:'application/json',
         body:JSON.stringify([{name:'warblade.pac',type:'file',size:1}])});

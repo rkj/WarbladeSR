@@ -757,8 +757,8 @@ expect: core_InitWindow_creates_an_800x600_window
 
 == core: InitWindow renderer hint off by one
 file: src/core/init.c
-- windowed, "Warblade 1.34 SR1", s_rendererHints[renderer])) {
-+ windowed, "Warblade 1.34 SR1", s_rendererHints[renderer - 1])) {
+- windowed, "Warblade SR 2.0", s_rendererHints[renderer])) {
++ windowed, "Warblade SR 2.0", s_rendererHints[renderer - 1])) {
 expect: core_InitWindow_fullscreen_with_a_chosen_renderer
 
 == core: InitWindow failed renderer not reset
@@ -889,7 +889,7 @@ expect: core_BootGame_writes_the_start_up_log
 
 == core: GameMain logs a wrong version
 file: src/core/main.c
-- LogPrint("WarBlade v1.34 SR1, Copyright 1999-2009 Edgar M Vigdal\r\n");
+- LogPrint("Warblade SR 2.0, Copyright 1999-2009 Edgar M Vigdal\r\n");
 + LogPrint("WarBlade v1.31, Copyright 1999-2009 Edgar M Vigdal\r\n");
 expect: core_BootGame_writes_the_start_up_log
 

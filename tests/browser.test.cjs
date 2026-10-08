@@ -29,7 +29,7 @@ async function play(page, runs) {
   assert.equal(await page.locator('#save-alert').isHidden(), true);
 }
 
-test('server saves survive a fresh login; no browser persistence or remembered login', async () => {
+test('server saves and login survive reload without browser game storage', async () => {
   const browser = await chromium.launch();
   try {
     const alice = await account(browser, 'BrowserAlice');
@@ -45,14 +45,12 @@ test('server saves survive a fresh login; no browser persistence or remembered l
 
     await alice.page.reload();
     await alice.page.waitForFunction(() => gameStarted);
-    assert.equal((await alice.context.cookies()).length, 0);
+    assert.equal((await alice.context.cookies()).some(cookie => cookie.name === 'warblade_session' && cookie.httpOnly), true);
     assert.deepEqual(await alice.page.evaluate(async () => ({
       databases: await indexedDB.databases(), local: localStorage.length, session: sessionStorage.length,
     })), {databases: [], local: 0, session: 0});
-    assert.equal(await alice.page.evaluate(() => Module._WebAccountStatus()), 0);
-    await alice.page.evaluate(() => Module.ccall('WebQueueCredentials', 'number', ['string','string','number'],
-      ['BrowserAlice', 'long password 123', 0]));
     await alice.page.waitForFunction(() => Module._WebAccountStatus() === 1);
+    assert.equal(await alice.page.evaluate(() => Module.accountName), 'BrowserAlice');
     await play(alice.page, 2);
     const bob = await account(browser, 'BrowserBob');
     await play(bob.page, 1);

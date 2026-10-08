@@ -62,7 +62,7 @@ static void RecordFill(SDL_FRect rect, SDL_BlendMode blend, float r, float g, fl
 
 void SysInit(void)
 {
-    SDL_SetAppMetadata("Warblade", "1.34 SR1", "as.warblade.warblade");
+    SDL_SetAppMetadata("Warblade", "2.0", "as.warblade.warblade");
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD))
         SDL_Log("SDL_Init failed: %s", SDL_GetError());
 }

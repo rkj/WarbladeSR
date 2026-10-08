@@ -883,6 +883,18 @@ void MenuUpdate(bool moved)
     }
 
 #ifdef __EMSCRIPTEN__
+    if (g_clickItem == 9003) {
+        if (WebCanPlay() && !WebIsGuest() && g_state == STATE_TITLE &&
+            !g_profileReadOnly && ProfileValid(g_profileIndex)) {
+            g_gameMode = MODE_SINGLE;
+            g_hofMode = g_cfg.difficulty;
+            g_newGameOnClose = 1;
+            g_clickItem = MENUID_CANCEL_ALL;
+        } else {
+            g_clickItem = -1;
+            g_clickWin = -1;
+        }
+    }
     if (g_clickItem == 9000 && g_clickWin >= 0) {
         WebQueueCredentials(g_windows[g_clickWin].edits[0].buf,
                             g_windows[g_clickWin].edits[1].buf, WebLoginMode());

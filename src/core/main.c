@@ -45,6 +45,9 @@ EM_JS(void, WebReadIdentity, (char *name, int capacity, char *error, int errorCa
     stringToUTF8(Module.accountName || '', name, capacity);
     stringToUTF8(Module.authError || 'Could not sign in. Please try again.', error, errorCapacity);
 });
+EM_JS(int, WebHasRestoredIdentity, (), {
+    return typeof Module.accountName === 'string' && Module.accountName.length > 0 ? 1 : 0;
+});
 EM_ASYNC_JS(void, WebSignOut, (), {
     await Module.signOutGame();
 });
@@ -211,6 +214,44 @@ static void WebShowLogin(int create)
     g_clickWin = g_clickItem = -1;
 }
 
+static int WebActivateAccount(void)
+{
+    g_profileIndex = -1;
+    g_profileCount = 0;
+    LoadSettings();
+    ScanProfiles();
+    if (g_profileCount > 1) {
+        webAccountStatus = -1;
+        snprintf(webAuthError, sizeof(webAuthError), "Multiple saved profiles need migration. Progress has been preserved.");
+    } else {
+        if (!g_profileCount) {
+            NextAccountReset();
+            ResetAccount();
+        } else {
+            UnpackAccount(0);
+        }
+        WebNormalizeAccount();
+        PackAccount(0);
+        SaveAccount(0);
+        g_selProfile = g_cfg.profileSel = 0;
+        LoadHiscores();
+        LoadBestScore();
+        UnpackAccount(0);
+        ActivateProfile(0);
+        ClearAccount();
+        webGuestMode = 0;
+        webAccountStatus = 1;
+        g_loginWinOpen = 0;
+        webLoginVisible = 0;
+        webAuthError[0] = 0;
+        WinCloseAll();
+        WebUpdateLoginInputs();
+        g_clickWin = g_clickItem = -1;
+        return 1;
+    }
+    return 0;
+}
+
 // Run asynchronous authentication only from the game's own main loop, never
 // from a second exported async stack while its frame loop is suspended.
 void WebProcessAccountQueue(void)
@@ -279,41 +320,8 @@ void WebProcessAccountQueue(void)
     memset(webLoginPassword, 0, sizeof(webLoginPassword));
     WebReadIdentity(webAccountName, sizeof(webAccountName), webAuthError, sizeof(webAuthError));
     webAuthBusy = 0;
-    if (ok && webAccountName[0]) {
-        g_profileIndex = -1;
-        g_profileCount = 0;
-        LoadSettings();
-        ScanProfiles();
-        if (g_profileCount > 1) {
-            webAccountStatus = -1;
-            snprintf(webAuthError, sizeof(webAuthError), "Multiple saved profiles need migration. Progress has been preserved.");
-        } else {
-            if (!g_profileCount) {
-                NextAccountReset();
-                ResetAccount();
-            } else {
-                UnpackAccount(0);
-            }
-            WebNormalizeAccount();
-            PackAccount(0);
-            SaveAccount(0);
-            g_selProfile = g_cfg.profileSel = 0;
-            LoadHiscores();
-            LoadBestScore();
-            UnpackAccount(0);
-            ActivateProfile(0);
-            ClearAccount();
-            webGuestMode = 0;
-            webAccountStatus = 1;
-            g_loginWinOpen = 0;
-            webLoginVisible = 0;
-            webAuthError[0] = 0;
-            WinCloseAll();
-            WebUpdateLoginInputs();
-            g_clickWin = g_clickItem = -1;
-            return;
-        }
-    }
+    if (ok && webAccountName[0] && WebActivateAccount())
+        return;
     WebShowLogin(webLoginCreate);
 }
 
@@ -427,7 +435,7 @@ int GameMain()
     g_items[140].alive = 5;
     MakeGameDir();
     LogInit();
-    LogPrint("WarBlade v1.34 SR1, Copyright 1999-2009 Edgar M Vigdal\r\n");
+    LogPrint("Warblade SR 2.0, Copyright 1999-2009 Edgar M Vigdal\r\n");
 
     HidePointer();
     LogPrint("Hide mouse curosr is passed...\r\n");
@@ -657,7 +665,13 @@ int GameMain()
     g_loginWinOpen = 0;
     g_loggedIn = 0;
 #ifdef __EMSCRIPTEN__
-    WebOpenLogin(0);
+    if (WebHasRestoredIdentity()) {
+        WebReadIdentity(webAccountName, sizeof(webAccountName), webAuthError, sizeof(webAuthError));
+        if (!WebActivateAccount())
+            WebOpenLogin(0);
+    } else {
+        WebOpenLogin(0);
+    }
 #else
     // ---- default-account login window (a profile is selected and remembered) ----
     if (g_cfg.profileSel != -1) {
@@ -826,10 +840,14 @@ bool GameInit()
 {
     LoadSettings();
     g_noProfilesError = 0;
+#ifndef __EMSCRIPTEN__
     ScanProfiles();
 
     if (g_cfg.profileSel != -1)
         g_windowed = GetProfileCfgFlag(g_cfg.profileSel);
+#endif
+    // Web profiles are scanned and activated together after the browser has
+    // restored a server account, or after an explicit native sign-in.
     if (SysDesktopWidth() <= (int)g_screenW)  // desktop too narrow to run windowed
         g_windowed = 0;
     if (SysDesktopHeight() <= (int)g_screenH)  // desktop too short to run windowed
@@ -919,7 +937,7 @@ void LogCrashReport(const char *reason)
     LogPrint("\r\n");
     LogPrint("\r\n");
     LogPrint("\r\n");
-    LogPrint("## CRASH ## v1.34 SR1\r\n");
+    LogPrint("## CRASH ## v2.0\r\n");
     LogPrint("Version : FULL VERSION\r\n");
     LogPrint("\r\n");
     sprintf(sMsg, "Program State: %d\r\n", g_state);

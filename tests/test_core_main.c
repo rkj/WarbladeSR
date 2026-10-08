@@ -42,7 +42,7 @@ static void WriteSettingsFile(void (*tweak)(void))
 
 #define BOOT_LOG                                                                   \
     "************ Warblade Debug information ************\r\n"                    \
-    "WarBlade v1.34 SR1, Copyright 1999-2009 Edgar M Vigdal\r\n"                  \
+    "Warblade SR 2.0, Copyright 1999-2009 Edgar M Vigdal\r\n"                  \
     "Hide mouse curosr is passed...\r\n"                                           \
     "Main window is created...\r\n"                                                \
     "Window is updated...\r\n"                                                     \

@@ -52,10 +52,12 @@ EMSCRIPTEN_KEEPALIVE int WebAccountStatus(void) { return authenticated; }
 
 int main(void)
 {
+    int restored = EM_ASM_INT({ return !!Module.accountName; });
     for (;;) {
-        if (queued) {
+        if (queued || restored) {
             queued = 0;
-            authenticated = authenticate(username, password, createAccount);
+            authenticated = restored ? 1 : authenticate(username, password, createAccount);
+            restored = 0;
             memset(password, 0, sizeof(password));
             if (authenticated) {
                 int runs = 0;

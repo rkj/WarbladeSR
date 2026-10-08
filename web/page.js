@@ -17,7 +17,7 @@ const MAX_DATA_DEPTH = 8;
 
 // Whether the server has the data (Docker image); otherwise the player chooses a folder.
 let server = false;
-// All game data and credentials remain in memory for this visit.
+// Game data stays in memory; the server session is remembered by an HttpOnly cookie.
 let runtimeReady = false;
 let accountReady = false;
 let saveConflict = false;
@@ -36,13 +36,11 @@ function setStatus(text, completed, total) {
 }
 function show(id, on) { $(id).hidden = !on; }
 
-// The session token and virtual filesystem exist only in this page's memory.
-let sessionToken = '';
+// Authentication uses the server's HttpOnly cookie; game files never use browser storage.
 let accountName = '';
 async function accountFetch(url, options = {}) {
   const headers = new Headers(options.headers || {});
-  if (sessionToken) headers.set('Authorization', 'Bearer ' + sessionToken);
-  return fetch(url, { ...options, headers, credentials: 'omit', cache: 'no-store' });
+  return fetch(url, { ...options, headers, credentials: 'same-origin', cache: 'no-store' });
 }
 
 // Remove the old optional asset cache; new code never creates browser databases.
@@ -212,6 +210,9 @@ async function loadSaves() {
   const response = await accountFetch('/api/saves', { cache: 'no-store' });
   if (!response.ok) throw new Error('save list: HTTP ' + response.status);
   const manifest = await response.json();
+  const profiles = manifest.files.filter(file => /(?:^|\/)profile\d{3}\.acc$/.test(file.path));
+  if (profiles.length > 1 || profiles.some(file => file.path !== 'warblade/profiles/profile000.acc'))
+    throw new Error('Multiple saved profiles need migration. Progress has been preserved.');
   saved.clear();
   for (const file of manifest.files) {
     if (file.path === 'warblade/warblade_132.his') continue;
@@ -355,6 +356,43 @@ function accountFailure(status, create) {
   return 'Account service unavailable. Please try again shortly.';
 }
 
+function clearAccountState() {
+  accountName = '';
+  Module.accountName = '';
+  accountReady = false;
+  removeTree(SAVE);
+  mkdirs(SAVE);
+  saved.clear();
+  scoreBase = null;
+  scoreVersion = null;
+}
+
+async function loadAccount(username) {
+  clearAccountState();
+  await loadSaves();
+  await loadScores();
+  accountName = username;
+  Module.accountName = username;
+}
+
+async function restoreSession() {
+  try {
+    const response = await accountFetch('/api/me');
+    if (!response.ok || response.redirected) throw new Error('session unavailable');
+    const result = await response.json();
+    if (result.username === null) return false;
+    if (typeof result.username !== 'string' ||
+        !/^[A-Za-z0-9][A-Za-z0-9_.-]{2,31}$/.test(result.username))
+      throw new Error('invalid account identity');
+    await loadAccount(result.username);
+    return true;
+  } catch (_) {
+    clearAccountState();
+    Module.authError = 'Could not restore your account. Check your connection and sign in again.';
+    return false;
+  }
+}
+
 // Called by the web game's native login window while its Asyncify loop yields.
 // The standalone executable continues to authenticate its local profiles itself.
 async function authenticateGame(username, password, create) {
@@ -380,34 +418,24 @@ async function authenticateGame(username, password, create) {
       return false;
     }
     const result = await response.json();
-    if (typeof result.token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(result.token) ||
-        typeof result.username !== 'string') {
+    if (typeof result.username !== 'string' ||
+        !/^[A-Za-z0-9][A-Za-z0-9_.-]{2,31}$/.test(result.username)) {
       Module.authError = 'Invalid response from the account service. Try again.';
       return false;
     }
-    sessionToken = result.token;
-    accountName = result.username;
-    // Discard unauthenticated temporary settings before loading private saves.
-    removeTree(SAVE);
-    saved.clear();
-    await loadSaves();
-    await loadScores();
-    Module.accountName = accountName;
+    await loadAccount(result.username);
     return true;
   } catch (_) {
     Module.authError = 'Cannot load your account. Check your connection and try again.';
-    sessionToken = '';
-    accountReady = false;
-    scoreBase = null;
-    scoreVersion = null;
+    clearAccountState();
     return false;
   } finally { authBusy = false; }
 }
 
 // Anonymous play uses only the current visit's RAM filesystem. It never owns a
-// bearer session, loads private saves or publishes scores to the shared board.
+// server account, loads private saves or publishes scores to the shared board.
 function beginGuestGame() {
-  if (authBusy || accountReady || sessionToken) return false;
+  if (authBusy || accountReady) return false;
   removeTree(SAVE);
   mkdirs(SAVE);
   saved.clear();
@@ -433,8 +461,7 @@ async function signOutGame() {
       Module.authError = 'Could not sign out. Check your connection and try again.';
       return false;
     }
-    sessionToken = '';
-    accountReady = false;
+    clearAccountState();
     location.reload();
     return true;
   } catch (_) {
@@ -671,6 +698,7 @@ var Module = {
     runtimeReady = true;
     mkdirs(SAVE);
     await forgetLegacyAssets();
+    await restoreSession();
     try { await loadGameData(); }
     catch (err) { startupError('Could not load Warblade. ' + err.message); }
 

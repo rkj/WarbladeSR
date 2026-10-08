@@ -125,7 +125,7 @@ start limits 18084 -v "$fx/data-big:/data:ro"
 docker run -d --name "$name-api" --network "$network" --read-only --tmpfs /tmp \
     --cap-drop ALL --security-opt no-new-privileges \
     -e WARBLADE_PUBLIC_ORIGIN=http://127.0.0.1:18085 \
-    -e WARBLADE_SESSION_MODE=memory \
+    -e WARBLADE_SESSION_MODE=cookie \
     -v "$fx/api-state:/state" "$api_image" > /dev/null
 containers="$containers $name-api"
 cat > "$fx/Caddyfile" <<EOF
@@ -161,7 +161,7 @@ done
 
 # The proxy can accept the home page before the API process has opened its port.
 i=0
-until python3 -c 'import http.client; c=http.client.HTTPConnection("127.0.0.1", 18085, timeout=2); c.request("GET", "/api/me"); assert c.getresponse().status == 401' 2> /dev/null; do
+until python3 -c 'import http.client; c=http.client.HTTPConnection("127.0.0.1", 18085, timeout=2); c.request("GET", "/api/me"); assert c.getresponse().status == 200' 2> /dev/null; do
     i=$((i + 1))
     if [ "$i" -gt 50 ]; then
         docker logs "$name-api"
@@ -185,5 +185,5 @@ status=0
 cd "$root"
 python3 -m unittest -v "$root/tests/test_server.py" || status=1
 PYTHONPATH="$root" python3 -m unittest discover -s "$root/tests" -p 'test_hiscores.py' -v || status=1
-node --test --test-concurrency=1 "$root/tests/browser.test.cjs" "$root/tests/auth.test.cjs" "$root/tests/startup.test.cjs" "$root/tests/mobile-login.test.cjs" "$root/tests/guest.test.cjs" "$root/tests/performance.test.cjs" "$root/tests/scaling.test.cjs" || status=1
+node --test --test-concurrency=1 "$root/tests/browser.test.cjs" "$root/tests/auth.test.cjs" "$root/tests/startup.test.cjs" "$root/tests/mobile-login.test.cjs" "$root/tests/guest.test.cjs" "$root/tests/performance.test.cjs" "$root/tests/scaling.test.cjs" "$root/tests/remembered-login.test.cjs" || status=1
 exit $status

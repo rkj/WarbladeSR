@@ -2,6 +2,8 @@
 
 A decompile of **Warblade 1.34**, created by Edgar M. Vigdal.
 
+Current Warblade SR version: **2.0**.
+
 This repository contains no game assets and as such cannot be used without them. Compiling also requires access to the game assets for the icon file.
 
 This decompilation is possible mainly due to the fact that Edgar released 1.34 as a debug build. This made it much more feasible to convert ~660 compiled functions back into their C++ form, on top of being able to cut out the PTK library (which is not available anymore) and delink it back into an object file. However this also means it's not possible to compile an exact byte-matching .exe to the original version, since it contains some debug-time patching that the compiler didn't do.
@@ -154,7 +156,7 @@ source /path/to/emsdk/emsdk_env.sh
 ./build-web.sh
 ```
 
-The page opens directly into a title-art loading view and starts the game automatically. The container serves that artwork from the mounted game archive; it is not bundled in the image. Once loaded, the native sign-in screen takes over.
+The page opens directly into a title-art loading view and starts the game automatically. The container serves that artwork from the mounted game archive; it is not bundled in the image. Once loaded, a remembered account opens directly; otherwise the native sign-in screen takes over.
 
 The page needs the account API and a same-origin reverse proxy; opening `build/web/index.html` directly or serving it with `python -m http.server` will not provide saves. The game runs its blocking loop with Asyncify. Touch controls and gamepads work in the browser.
 
@@ -162,9 +164,9 @@ The page needs the account API and a same-origin reverse proxy; opening `build/w
 
 `docker compose up --build -d` starts the static game, account API and a local Caddy proxy at `http://localhost:8080`. Put your own Warblade 1.34 assets in `game/data` first. The API database lives in the persistent `api-state` volume. Back it up with SQLite's online backup API or `sqlite3 .backup`, rather than copying a live WAL file alone.
 
-The GitHub workflow is configured to publish `ghcr.io/rkj/warbladesr` (static game) and `ghcr.io/rkj/warbladesr-api` (account API) after these changes reach upstream `main`. Pin the same source commit for both images. The static image accepts only GET and HEAD; route `/api/*` to the API container through a reverse proxy at the same origin. Set `WARBLADE_PUBLIC_ORIGIN` to that exact HTTPS origin in a public deployment, keep the API database private, and set `WARBLADE_TRUSTED_PROXY_IPS` only if the proxy overwrites `X-Real-IP` and its peer address is stable. Set `WARBLADE_SESSION_MODE=memory` for the browser page: the API uses Argon2id password hashes and returns a bearer session token held only in page memory; its save paths are account-scoped and checked with revisions.
+The GitHub workflow is configured to publish `ghcr.io/rkj/warbladesr` (static game) and `ghcr.io/rkj/warbladesr-api` (account API) after these changes reach upstream `main`. Pin the same source commit for both images. The static image accepts only GET and HEAD; route `/api/*` to the API container through a reverse proxy at the same origin. Set `WARBLADE_PUBLIC_ORIGIN` to that exact HTTPS origin in a public deployment, keep the API database private, and set `WARBLADE_TRUSTED_PROXY_IPS` only if the proxy overwrites `X-Real-IP` and its peer address is stable. Set `WARBLADE_SESSION_MODE=cookie` for the browser page: the API uses Argon2id password hashes and a 30-day HttpOnly, Secure, SameSite session cookie; its save paths are account-scoped and checked with revisions.
 
-The browser game's built-in player sign-in/create window authenticates with the server and loads its single profile. It has no second password or profile selector; its existing profile screen remains available for stats, reset, backup and restore. Reloading requires a fresh server login. High scores are submitted by the browser, so the shared table prevents lost updates but cannot prove that a score was earned without server-validated gameplay. See `docs/web-security.md` for the security boundary and limits.
+The browser game's built-in player sign-in/create window authenticates with the server and loads its single profile. It has no second password or profile selector; its existing profile screen remains available for stats, reset, backup and restore. Returning or reloading restores the same server account until its 30-day session expires or you sign out. No password or game saves are stored in browser storage. A single-player run saves automatically when the shop opens; use My Profile → Continue Game to resume its checkpoint. High scores are submitted by the browser, so the shared table prevents lost updates but cannot prove that a score was earned without server-validated gameplay. See `docs/web-security.md` for the security boundary and limits.
 
 
 # Used libraries

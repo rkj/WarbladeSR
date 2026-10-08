@@ -6,7 +6,7 @@ const { chromium } = require('playwright');
 const fs = require('node:fs');
 const path = require('node:path');
 
-test('native login bridge validates, authenticates and keeps no browser state', async () => {
+test('native login bridge validates and authenticates without storing game data in the browser', async () => {
   const browser = await chromium.launch({ args: ['--no-sandbox'] });
   try {
     const context = await browser.newContext();
@@ -19,7 +19,7 @@ test('native login bridge validates, authenticates and keeps no browser state', 
         if (networkDown) return route.abort('failed');
         await new Promise(resolve => setTimeout(resolve, 30));
         return route.fulfill({ status, contentType: 'application/json',
-          body: status === 200 ? JSON.stringify({username: 'TestPlayer', token:'T'.repeat(43)}) : '{}' });
+          body: status === 200 ? JSON.stringify({username: 'TestPlayer'}) : '{}' });
       }
       if (url.pathname === '/loading-title.jpg') return route.fulfill({status:404, body:''});
       if (url.pathname === '/warblade.js') return route.fulfill({ body: '' });
@@ -66,6 +66,6 @@ test('native login bridge validates, authenticates and keeps no browser state', 
       local:localStorage.length, session:sessionStorage.length})), {databases:[],local:0,session:0});
     await page.reload();
     assert.equal(await page.evaluate(() => accountReady), false);
-    assert.equal(await page.evaluate(() => sessionToken), '');
+    assert.equal(await page.evaluate(() => Module.accountName), '');
   } finally { await browser.close(); }
 });

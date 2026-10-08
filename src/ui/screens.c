@@ -40,7 +40,7 @@ void AboutScreen()
     Blit((g_screenW >> 1) + 0x62, 4, 0, g_gfxLogos, 0x30, 0x11e, 0x30, 0x2c);
 
     g_textCursorY = g_textCursorY + 0x22;
-    DrawMenuText("WARBLADE VERSION 1.34 SR1", POS_CENTERED, g_textAutoY, 0);
+    DrawMenuText("WARBLADE SR VERSION 2.0", POS_CENTERED, g_textAutoY, 0);
     g_textCursorY = g_textCursorY + 8;
     DrawTinyText("  CODING, GFX, SFX AND GAME DESIGN  ", POS_CENTERED, g_textAutoY, 3);
     g_textCursorY = g_textCursorY + 2;
