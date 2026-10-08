@@ -526,8 +526,8 @@ let performanceBuckets = new Map();
 let performanceSending = false;
 function placePerformanceCounter() {
   const rect = $('canvas').getBoundingClientRect();
-  $('performance').style.left = (rect.left + 6) + 'px';
-  $('performance').style.top = (rect.top + 6) + 'px';
+  $('performance').style.left = (rect.right - 6) + 'px';
+  $('performance').style.top = (rect.bottom - 6) + 'px';
 }
 function performanceSummary(phase, bucket) {
   let count = 0, p95 = bucket.max;
